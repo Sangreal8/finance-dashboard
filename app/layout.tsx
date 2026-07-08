@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import TopNav from "@/components/dashboard/TopNav";
 import "./globals.css";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "Finance Dashboard",
@@ -13,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("font-sans", geist.variable)}>
       <body>
         <main className="min-h-screen bg-neutral-50 px-5 py-6 text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
           <div className="mx-auto flex max-w-5xl flex-col gap-6">

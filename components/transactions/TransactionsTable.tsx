@@ -1,3 +1,5 @@
+import AddTransactionDialog from "./AddTransactionDialog";
+
 const transactions = [
   {
     date: "8 Jul",
@@ -42,9 +44,7 @@ export default function TransactionsTable() {
           </h1>
         </div>
 
-        <button className="rounded-full bg-neutral-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200">
-          Add transaction
-        </button>
+        <AddTransactionDialog />
       </div>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-neutral-200 dark:border-neutral-800">
@@ -64,14 +64,17 @@ export default function TransactionsTable() {
                 <td className="px-4 py-4 text-neutral-500 dark:text-neutral-400">
                   {transaction.date}
                 </td>
+
                 <td className="px-4 py-4 font-medium">
                   {transaction.description}
                 </td>
+
                 <td className="px-4 py-4">
                   <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
                     {transaction.category}
                   </span>
                 </td>
+
                 <td
                   className={`px-4 py-4 text-right font-semibold ${
                     transaction.type === "income"
