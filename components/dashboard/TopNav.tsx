@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const navItems = [
   { label: "Today", href: "/" },
@@ -8,13 +11,15 @@ const navItems = [
 ];
 
 export default function TopNav() {
+  const pathname = usePathname();
+
   return (
     <nav className="flex items-center justify-between">
       <p className="text-sm font-semibold tracking-tight">Finance Dashboard</p>
 
       <div className="flex rounded-full bg-neutral-100 p-1 text-sm dark:bg-neutral-900">
         {navItems.map((item) => {
-          const isActive = item.href === "/";
+          const isActive = pathname === item.href;
 
           return (
             <Link
