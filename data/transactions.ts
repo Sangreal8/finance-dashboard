@@ -1,0 +1,45 @@
+import type { Transaction } from "@/types/transaction";
+
+export const transactions: Transaction[] = [
+  {
+    id: "txn_001",
+    date: "2026-07-08",
+    description: "Tesco",
+    category: "Groceries",
+    amount: -42.18,
+    type: "expense",
+    account: "Current Account",
+    cleared: true,
+  },
+  {
+    id: "txn_002",
+    date: "2026-07-08",
+    description: "Salary",
+    category: "Income",
+    amount: 3164,
+    type: "income",
+    account: "Current Account",
+    cleared: true,
+  },
+  {
+    id: "txn_003",
+    date: "2026-07-07",
+    description: "Mortgage",
+    category: "Bills",
+    amount: -903,
+    type: "expense",
+    account: "Current Account",
+    recurring: true,
+    cleared: true,
+  },
+  {
+    id: "txn_004",
+    date: "2026-07-06",
+    description: "Circle K",
+    category: "Fuel",
+    amount: -48,
+    type: "expense",
+    account: "Current Account",
+    cleared: true,
+  },
+];

@@ -1,35 +1,5 @@
+import { transactions } from "@/data/transactions";
 import AddTransactionDialog from "./AddTransactionDialog";
-
-const transactions = [
-  {
-    date: "8 Jul",
-    description: "Tesco",
-    category: "Groceries",
-    amount: "-€42.18",
-    type: "expense",
-  },
-  {
-    date: "8 Jul",
-    description: "Salary",
-    category: "Income",
-    amount: "+€3,164.00",
-    type: "income",
-  },
-  {
-    date: "7 Jul",
-    description: "Mortgage",
-    category: "Bills",
-    amount: "-€903.00",
-    type: "expense",
-  },
-  {
-    date: "6 Jul",
-    description: "Circle K",
-    category: "Fuel",
-    amount: "-€48.00",
-    type: "expense",
-  },
-];
 
 export default function TransactionsTable() {
   return (
@@ -54,15 +24,22 @@ export default function TransactionsTable() {
               <th className="px-4 py-3 font-medium">Date</th>
               <th className="px-4 py-3 font-medium">Description</th>
               <th className="px-4 py-3 font-medium">Category</th>
+              <th className="px-4 py-3 font-medium">Account</th>
               <th className="px-4 py-3 text-right font-medium">Amount</th>
             </tr>
           </thead>
 
           <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {transactions.map((transaction) => (
-              <tr key={`${transaction.date}-${transaction.description}`}>
+              <tr
+                key={transaction.id}
+                className="transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+              >
                 <td className="px-4 py-4 text-neutral-500 dark:text-neutral-400">
-                  {transaction.date}
+                  {new Date(transaction.date).toLocaleDateString("en-IE", {
+                    day: "numeric",
+                    month: "short",
+                  })}
                 </td>
 
                 <td className="px-4 py-4 font-medium">
@@ -75,6 +52,10 @@ export default function TransactionsTable() {
                   </span>
                 </td>
 
+                <td className="px-4 py-4 text-neutral-500 dark:text-neutral-400">
+                  {transaction.account}
+                </td>
+
                 <td
                   className={`px-4 py-4 text-right font-semibold ${
                     transaction.type === "income"
@@ -82,7 +63,11 @@ export default function TransactionsTable() {
                       : "text-neutral-950 dark:text-neutral-50"
                   }`}
                 >
-                  {transaction.amount}
+                  {transaction.amount > 0 ? "+" : "-"}€
+                  {Math.abs(transaction.amount).toLocaleString("en-IE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </td>
               </tr>
             ))}
