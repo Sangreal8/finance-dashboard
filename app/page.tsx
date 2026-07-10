@@ -1,11 +1,10 @@
 import { FinancialSnapshot } from "@/components/dashboard/FinancialSnapshot";
 import { UpcomingTimeline } from "@/components/dashboard/UpcomingTimeline";
-import { getFinancialPosition } from "@/lib/finance/engine";
-import { getDashboardSummary } from "@/lib/dashboard/summary";
+import { getFinancialPosition, getFinanceTimeline } from "@/lib/finance/engine";
 
 export default function DashboardPage() {
   const position = getFinancialPosition();
-  const summary = getDashboardSummary();
+  const timeline = getFinanceTimeline();
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
@@ -17,21 +16,9 @@ export default function DashboardPage() {
           </h1>
         </header>
 
-        <FinancialSnapshot
-          position={{
-            currentCash: position.availableToday,
-            committedOutgoing: position.knownCommitments,
-            expectedIncoming: position.expectedIncome,
-            cashAfterCommitments:
-              position.availableToday - position.knownCommitments,
-            projectedBalance: position.projectedMonthEnd,
-            emergencyBuffer: position.safetyBuffer,
-            availableBeforePayday: position.safeToSpend,
-            financialStatus: summary.position.financialStatus,
-          }}
-        />
+        <FinancialSnapshot position={position} />
 
-        <UpcomingTimeline events={summary.projection} />
+        <UpcomingTimeline events={timeline} />
       </div>
     </main>
   );

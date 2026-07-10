@@ -1,10 +1,11 @@
+import { getFinancialStatus } from "./status";
 import type {
   Account,
   FinancialPosition,
   MonthlyPlan,
 } from "./types";
 
-function getAvailableCash(accounts: Account[]) {
+export function getAvailableCash(accounts: Account[]) {
   return accounts
     .filter(
       (account) =>
@@ -34,19 +35,24 @@ export function buildFinancialPosition(
     0
   );
 
-  const safeToSpend = Math.max(
-    0,
+  const rawSafeToSpend =
     availableToday -
-      knownCommitments -
-      estimatedRemainingSpend -
-      plan.safetyBuffer
-  );
+    knownCommitments -
+    estimatedRemainingSpend -
+    plan.safetyBuffer;
+
+  const safeToSpend = Math.max(0, rawSafeToSpend);
 
   const projectedMonthEnd =
     availableToday +
     expectedIncome -
     knownCommitments -
     estimatedRemainingSpend;
+
+  const financialStatus = getFinancialStatus({
+    safeToSpend: rawSafeToSpend,
+    projectedMonthEnd,
+  });
 
   return {
     availableToday,
@@ -56,5 +62,6 @@ export function buildFinancialPosition(
     safeToSpend,
     expectedIncome,
     projectedMonthEnd,
+    financialStatus,
   };
 }

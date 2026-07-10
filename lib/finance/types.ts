@@ -58,6 +58,14 @@ export interface MonthlyPlan {
   safetyBuffer: number;
 }
 
+export type FinancialHealth = "healthy" | "warning" | "critical";
+
+export interface FinancialStatus {
+  health: FinancialHealth;
+  title: string;
+  description: string;
+}
+
 export interface FinancialPosition {
   availableToday: number;
   knownCommitments: number;
@@ -66,4 +74,15 @@ export interface FinancialPosition {
   safeToSpend: number;
   expectedIncome: number;
   projectedMonthEnd: number;
+  financialStatus: FinancialStatus;
+}
+
+export interface FinanceTimelineEvent {
+  id: string;
+  date: string;
+  name: string;
+  amount: number;
+  balanceAfter: number;
+  category: string;
+  confidence: "confirmed" | "estimated";
 }
