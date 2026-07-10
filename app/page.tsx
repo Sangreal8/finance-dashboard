@@ -1,8 +1,10 @@
 import { FinancialSnapshot } from "@/components/dashboard/FinancialSnapshot";
 import { UpcomingTimeline } from "@/components/dashboard/UpcomingTimeline";
+import { getFinancialPosition } from "@/lib/finance/engine";
 import { getDashboardSummary } from "@/lib/dashboard/summary";
 
 export default function DashboardPage() {
+  const position = getFinancialPosition();
   const summary = getDashboardSummary();
 
   return (
@@ -15,7 +17,19 @@ export default function DashboardPage() {
           </h1>
         </header>
 
-        <FinancialSnapshot position={summary.position} />
+        <FinancialSnapshot
+          position={{
+            currentCash: position.availableToday,
+            committedOutgoing: position.knownCommitments,
+            expectedIncoming: position.expectedIncome,
+            cashAfterCommitments:
+              position.availableToday - position.knownCommitments,
+            projectedBalance: position.projectedMonthEnd,
+            emergencyBuffer: position.safetyBuffer,
+            availableBeforePayday: position.safeToSpend,
+            financialStatus: summary.position.financialStatus,
+          }}
+        />
 
         <UpcomingTimeline events={summary.projection} />
       </div>

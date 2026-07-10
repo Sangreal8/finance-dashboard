@@ -2,9 +2,17 @@ import type { MonthlyPlan } from "@/lib/finance/types";
 
 export const monthlyPlan: MonthlyPlan = {
   month: "2026-07",
-  openingBalance: 2171,
-  expectedIncome: 3164,
   safetyBuffer: 250,
+
+  income: [
+    {
+      id: "salary-july",
+      name: "Salary",
+      amount: 3164,
+      expectedDay: 23,
+      confidence: "confirmed",
+    },
+  ],
 
   commitments: [
     {

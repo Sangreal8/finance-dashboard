@@ -1,3 +1,5 @@
+export type Currency = "EUR" | "GBP";
+
 export type AccountType =
   | "current"
   | "savings"
@@ -9,7 +11,8 @@ export interface Account {
   name: string;
   type: AccountType;
   balance: number;
-  currency: "EUR" | "GBP";
+  currency: Currency;
+  includeInAvailableCash: boolean;
 }
 
 export type CommitmentType =
@@ -31,6 +34,14 @@ export interface Commitment {
   mandatory: boolean;
 }
 
+export interface IncomeItem {
+  id: string;
+  name: string;
+  amount: number;
+  expectedDay: number;
+  confidence: "confirmed" | "estimated";
+}
+
 export interface ForecastItem {
   id: string;
   name: string;
@@ -41,9 +52,8 @@ export interface ForecastItem {
 
 export interface MonthlyPlan {
   month: string;
-  openingBalance: number;
-  expectedIncome: number;
   commitments: Commitment[];
+  income: IncomeItem[];
   forecastItems: ForecastItem[];
   safetyBuffer: number;
 }
