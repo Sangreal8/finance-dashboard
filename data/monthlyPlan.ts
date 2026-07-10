@@ -1,8 +1,25 @@
+import { recurringCommitments } from "@/data/recurringCommitments";
+import { transactions } from "@/data/transactions";
+import { matchCommitmentsToTransactions } from "@/lib/finance/matcher";
+import { generateCommitmentsForMonth } from "@/lib/finance/recurring";
 import type { MonthlyPlan } from "@/lib/finance/types";
 
+const month = "2026-07";
+
+const generatedCommitments = generateCommitmentsForMonth(
+  recurringCommitments,
+  month
+);
+
+const matchedCommitments = matchCommitmentsToTransactions(
+  generatedCommitments,
+  transactions
+);
+
 export const monthlyPlan: MonthlyPlan = {
-  month: "2026-07",
+  month,
   safetyBuffer: 250,
+  commitments: matchedCommitments,
 
   income: [
     {
@@ -11,36 +28,6 @@ export const monthlyPlan: MonthlyPlan = {
       amount: 3164,
       expectedDay: 23,
       confidence: "confirmed",
-    },
-  ],
-
-  commitments: [
-    {
-      id: "mortgage",
-      name: "Mortgage",
-      amount: 903,
-      type: "essential",
-      dueDay: 11,
-      fixed: true,
-      mandatory: true,
-    },
-    {
-      id: "electricity",
-      name: "Electricity",
-      amount: 95,
-      type: "essential",
-      dueDay: 15,
-      fixed: false,
-      mandatory: true,
-    },
-    {
-      id: "internet",
-      name: "Internet",
-      amount: 40,
-      type: "essential",
-      dueDay: 18,
-      fixed: true,
-      mandatory: true,
     },
   ],
 

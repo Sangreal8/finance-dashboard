@@ -5,8 +5,12 @@ import type {
   MonthlyPlan,
 } from "./types";
 
-function buildDate(month: string, day: number) {
-  return `${month}-${String(day).padStart(2, "0")}`;
+function buildIncomeDate(month: string, day: number) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDayOfMonth = new Date(year, monthNumber, 0).getDate();
+  const safeDay = Math.min(Math.max(day, 1), lastDayOfMonth);
+
+  return `${month}-${String(safeDay).padStart(2, "0")}`;
 }
 
 export function buildFinanceTimeline(
@@ -18,11 +22,13 @@ export function buildFinanceTimeline(
     "balanceAfter"
   >[] = plan.commitments.map((commitment) => ({
     id: commitment.id,
-    date: buildDate(plan.month, commitment.dueDay),
+    date: commitment.dueDate,
     name: commitment.name,
-    amount: -commitment.amount,
+    amount:
+      commitment.status === "paid" ? 0 : -commitment.amount,
     category: commitment.type,
-    confidence: commitment.fixed ? "confirmed" : "estimated",
+    confidence: commitment.confidence,
+    status: commitment.status,
   }));
 
   const incomeEvents: Omit<
@@ -30,11 +36,12 @@ export function buildFinanceTimeline(
     "balanceAfter"
   >[] = plan.income.map((income) => ({
     id: income.id,
-    date: buildDate(plan.month, income.expectedDay),
+    date: buildIncomeDate(plan.month, income.expectedDay),
     name: income.name,
     amount: income.amount,
     category: "income",
     confidence: income.confidence,
+    status: "expected",
   }));
 
   const events = [...commitmentEvents, ...incomeEvents].sort((a, b) => {

@@ -23,7 +23,12 @@ export function buildFinancialPosition(
   const availableToday = getAvailableCash(accounts);
 
   const knownCommitments = plan.commitments
-    .filter((item) => item.mandatory)
+    .filter(
+      (item) =>
+        item.mandatory &&
+        item.status !== "paid" &&
+        item.status !== "cancelled"
+    )
     .reduce((total, item) => total + item.amount, 0);
 
   const estimatedRemainingSpend = plan.forecastItems

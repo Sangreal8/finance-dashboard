@@ -24,14 +24,62 @@ export type CommitmentType =
   | "savings"
   | "discretionary";
 
-export interface Commitment {
+export type RecurrenceFrequency =
+  | "weekly"
+  | "monthly"
+  | "quarterly"
+  | "yearly";
+
+export type AmountStrategy =
+  | "fixed"
+  | "estimated"
+  | "latest"
+  | "average";
+
+export type Confidence = "confirmed" | "estimated";
+
+export type PlannedCommitmentStatus =
+  | "planned"
+  | "matched"
+  | "paid"
+  | "missed"
+  | "cancelled";
+
+export interface RecurringCommitment {
   id: string;
   name: string;
   amount: number;
+  amountStrategy: AmountStrategy;
   type: CommitmentType;
-  dueDay: number;
-  fixed: boolean;
+  frequency: RecurrenceFrequency;
+
+  dueDay?: number;
+  dueMonth?: number;
+
   mandatory: boolean;
+  active: boolean;
+
+  startsOn: string;
+  endsOn?: string;
+
+  confidence: Confidence;
+  paymentAccountId?: string;
+  merchantPatterns?: string[];
+}
+
+export interface PlannedCommitment {
+  id: string;
+  recurringCommitmentId: string;
+  name: string;
+  amount: number;
+  type: CommitmentType;
+  dueDate: string;
+  mandatory: boolean;
+  confidence: Confidence;
+  status: PlannedCommitmentStatus;
+  paymentAccountId?: string;
+  merchantPatterns?: string[];
+  matchedTransactionId?: string;
 }
 
 export interface IncomeItem {
@@ -39,7 +87,7 @@ export interface IncomeItem {
   name: string;
   amount: number;
   expectedDay: number;
-  confidence: "confirmed" | "estimated";
+  confidence: Confidence;
 }
 
 export interface ForecastItem {
@@ -52,7 +100,7 @@ export interface ForecastItem {
 
 export interface MonthlyPlan {
   month: string;
-  commitments: Commitment[];
+  commitments: PlannedCommitment[];
   income: IncomeItem[];
   forecastItems: ForecastItem[];
   safetyBuffer: number;
@@ -84,5 +132,6 @@ export interface FinanceTimelineEvent {
   amount: number;
   balanceAfter: number;
   category: string;
-  confidence: "confirmed" | "estimated";
+  confidence: Confidence;
+  status: PlannedCommitmentStatus | "expected";
 }
