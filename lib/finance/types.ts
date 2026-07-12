@@ -106,7 +106,43 @@ export interface MonthlyPlan {
   safetyBuffer: number;
 }
 
-export type FinancialHealth = "healthy" | "warning" | "critical";
+export interface Reserve {
+  id: string;
+  name: string;
+  amount: number;
+  type: CommitmentType;
+  dueDate?: string;
+  mandatory: boolean;
+  active: boolean;
+  reserved: boolean;
+  confidence: Confidence;
+}
+
+export type AllocationSource =
+  | "commitment"
+  | "forecast"
+  | "reserve";
+
+export type AllocationConfidence =
+  | Confidence
+  | ForecastItem["confidence"];
+
+export interface Allocation {
+  id: string;
+  sourceId: string;
+  name: string;
+  amount: number;
+  type: CommitmentType;
+  source: AllocationSource;
+  confidence: AllocationConfidence;
+  mandatory: boolean;
+  dueDate?: string;
+}
+
+export type FinancialHealth =
+  | "healthy"
+  | "warning"
+  | "critical";
 
 export interface FinancialStatus {
   health: FinancialHealth;
@@ -116,12 +152,19 @@ export interface FinancialStatus {
 
 export interface FinancialPosition {
   availableToday: number;
+
+  allocations: Allocation[];
+  allocatedCash: number;
+
   knownCommitments: number;
   estimatedRemainingSpend: number;
+  reservedCash: number;
+
   safetyBuffer: number;
   safeToSpend: number;
   expectedIncome: number;
   projectedMonthEnd: number;
+
   financialStatus: FinancialStatus;
 }
 
