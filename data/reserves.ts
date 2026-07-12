@@ -2,15 +2,25 @@ import type { Reserve } from "@/lib/finance/types";
 
 export const reserves: Reserve[] = [
   {
-    id: "legal-fees",
-    name: "Legal fees",
-    amount: 600,
+    id: "solicitor-payment-balance",
+    name: "Solicitor payment balance",
+    amount: 584.81,
     type: "legal",
-    dueDate: "2026-08-01",
     mandatory: true,
     active: true,
     reserved: true,
     confidence: "estimated",
+  },
+  {
+    id: "credit-card-minimum-july",
+    name: "Credit card minimum",
+    amount: 123.81,
+    type: "debt",
+    dueDate: "2026-07-31",
+    mandatory: true,
+    active: true,
+    reserved: false,
+    confidence: "confirmed",
   },
   {
     id: "krakow-spending",

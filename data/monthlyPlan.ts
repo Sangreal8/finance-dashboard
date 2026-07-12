@@ -18,7 +18,7 @@ const matchedCommitments = matchCommitmentsToTransactions(
 
 export const monthlyPlan: MonthlyPlan = {
   month,
-  safetyBuffer: 250,
+  safetyBuffer: 0,
   commitments: matchedCommitments,
 
   income: [
@@ -26,31 +26,24 @@ export const monthlyPlan: MonthlyPlan = {
       id: "salary-july",
       name: "Salary",
       amount: 3164,
-      expectedDay: 23,
+      expectedDay: 28,
       confidence: "confirmed",
     },
   ],
 
   forecastItems: [
     {
-      id: "groceries",
-      name: "Groceries",
-      amount: 300,
+      id: "groceries-remaining",
+      name: "Groceries until payday",
+      amount: 110,
       type: "essential",
       confidence: "estimated",
     },
     {
-      id: "fuel",
-      name: "Fuel",
-      amount: 150,
+      id: "fuel-remaining",
+      name: "Fuel until payday",
+      amount: 30,
       type: "essential",
-      confidence: "estimated",
-    },
-    {
-      id: "general-spending",
-      name: "General spending",
-      amount: 250,
-      type: "discretionary",
       confidence: "estimated",
     },
   ],

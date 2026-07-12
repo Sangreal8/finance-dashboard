@@ -9,28 +9,37 @@ export function getFinancialStatus({
   safeToSpend,
   projectedMonthEnd,
 }: FinancialStatusArgs): FinancialStatus {
-  if (safeToSpend >= 500 && projectedMonthEnd >= 1000) {
+  if (safeToSpend >= 250 && projectedMonthEnd >= 500) {
     return {
       health: "healthy",
-      title: "You're comfortably on track",
+      title: "You're on track",
       description:
-        "Your current plan leaves room for your commitments, expected spending and safety buffer.",
+        "Everything due before payday is covered, with some money still genuinely free to spend.",
+    };
+  }
+
+  if (safeToSpend > 0 && projectedMonthEnd >= 0) {
+    return {
+      health: "warning",
+      title: "Things are a little tight until payday",
+      description:
+        "Your essential costs are covered, but there is limited room for additional spending.",
     };
   }
 
   if (projectedMonthEnd >= 0) {
     return {
       health: "warning",
-      title: "Keep an eye on spending",
+      title: "Everything is already spoken for",
       description:
-        "Your plan remains positive, but there is limited room for unexpected costs.",
+        "You can reach payday, but there is no genuinely free spending money once your commitments and safety buffer are protected.",
     };
   }
 
   return {
     health: "critical",
-    title: "Cash flow needs attention",
+    title: "You may need to use part of your buffer",
     description:
-      "Your current plan is projected to finish below zero unless something changes.",
+      "Your current plan is projected to fall short before the next income arrives.",
   };
 }

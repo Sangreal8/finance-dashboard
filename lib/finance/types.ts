@@ -150,6 +150,21 @@ export interface FinancialStatus {
   description: string;
 }
 
+export type FinancialBreakdownRowType =
+  | "starting"
+  | "commitment"
+  | "forecast"
+  | "reserve"
+  | "buffer"
+  | "result";
+
+export interface FinancialBreakdownRow {
+  id: string;
+  label: string;
+  amount: number;
+  type: FinancialBreakdownRowType;
+}
+
 export interface FinancialPosition {
   availableToday: number;
 
@@ -164,6 +179,8 @@ export interface FinancialPosition {
   safeToSpend: number;
   expectedIncome: number;
   projectedMonthEnd: number;
+
+  breakdown: FinancialBreakdownRow[];
 
   financialStatus: FinancialStatus;
 }

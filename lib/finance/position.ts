@@ -5,6 +5,7 @@ import {
 import { getFinancialStatus } from "./status";
 import type {
   Account,
+  FinancialBreakdownRow,
   FinancialPosition,
   MonthlyPlan,
   Reserve,
@@ -100,6 +101,45 @@ export function buildFinancialPosition(
     projectedMonthEnd,
   });
 
+  const breakdown: FinancialBreakdownRow[] = [
+    {
+      id: "available-today",
+      label: "Available today",
+      amount: availableToday,
+      type: "starting",
+    },
+    {
+      id: "known-commitments",
+      label: "Known commitments",
+      amount: -knownCommitments,
+      type: "commitment",
+    },
+    {
+      id: "forecast-spending",
+      label: "Forecast spending",
+      amount: -estimatedRemainingSpend,
+      type: "forecast",
+    },
+    {
+      id: "reserved-money",
+      label: "Reserved money",
+      amount: -reservedCash,
+      type: "reserve",
+    },
+    {
+      id: "safety-buffer",
+      label: "Safety buffer",
+      amount: -plan.safetyBuffer,
+      type: "buffer",
+    },
+    {
+      id: "safe-to-spend",
+      label: "Safe to spend",
+      amount: safeToSpend,
+      type: "result",
+    },
+  ];
+
   return {
     availableToday,
     allocations,
@@ -111,6 +151,7 @@ export function buildFinancialPosition(
     safeToSpend,
     expectedIncome,
     projectedMonthEnd,
+    breakdown,
     financialStatus,
   };
 }
