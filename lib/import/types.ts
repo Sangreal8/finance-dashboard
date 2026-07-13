@@ -8,6 +8,20 @@ export type ImportAccountType =
   | "savings"
   | "credit_card";
 
+export type TransactionKind =
+  | "purchase"
+  | "income"
+  | "transfer"
+  | "fee"
+  | "refund"
+  | "unknown";
+
+export interface MerchantAliasRule {
+  merchantName: string;
+  kind: Exclude<TransactionKind, "unknown">;
+  patterns: RegExp[];
+}
+
 export interface ImportAccount {
   source: ImportSource;
   externalAccountId?: string;
@@ -29,8 +43,7 @@ export interface ImportedTransaction {
   postedDate: string;
 
   /**
-   * Original bank-provided description. This should never be overwritten,
-   * because it is useful for auditing and improving matching rules.
+   * Original bank-provided description. This should never be overwritten.
    */
   rawDescription: string;
 
@@ -44,8 +57,7 @@ export interface ImportedTransaction {
   balanceAfter?: number;
 
   /**
-   * Additional bank-specific information that may later help matching,
-   * deduplication or troubleshooting.
+   * Bank-specific context that can help later matching and reconciliation.
    */
   metadata?: Record<string, string>;
 }
@@ -65,9 +77,9 @@ export interface NormalisedTransaction {
   currency: string;
   balanceAfter?: number;
 
-  /**
-   * Allows future import runs to retain the original provider context.
-   */
+  kind: TransactionKind;
+  recognised: boolean;
+
   metadata?: Record<string, string>;
 }
 

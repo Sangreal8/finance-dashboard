@@ -2,7 +2,11 @@
 
 import { type ChangeEvent, useMemo, useState } from "react";
 import { normaliseTransactions, parseAibCsv } from "@/lib/import";
-import type { ImportResult, NormalisedTransaction } from "@/lib/import";
+import type {
+  ImportResult,
+  NormalisedTransaction,
+  TransactionKind,
+} from "@/lib/import";
 
 interface ImportedFileState {
   fileName: string;
@@ -25,6 +29,19 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T12:00:00`));
 }
 
+function getKindLabel(kind: TransactionKind) {
+  const labels: Record<TransactionKind, string> = {
+    purchase: "Purchase",
+    income: "Income",
+    transfer: "Transfer",
+    fee: "Fee",
+    refund: "Refund",
+    unknown: "Needs review",
+  };
+
+  return labels[kind];
+}
+
 export default function ImportTransactionsPage() {
   const [importedFile, setImportedFile] = useState<ImportedFileState | null>(
     null,
@@ -33,41 +50,6 @@ export default function ImportTransactionsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [isReading, setIsReading] = useState(false);
-
-  const merchantSummary = useMemo(() => {
-    if (!importedFile) {
-      return [];
-    }
-
-    const merchants = new Map<
-      string,
-      {
-        name: string;
-        count: number;
-        total: number;
-      }
-    >();
-
-    importedFile.transactions.forEach((transaction) => {
-      const existing = merchants.get(transaction.merchantName);
-
-      if (existing) {
-        existing.count += 1;
-        existing.total += transaction.amount;
-        return;
-      }
-
-      merchants.set(transaction.merchantName, {
-        name: transaction.merchantName,
-        count: 1,
-        total: transaction.amount,
-      });
-    });
-
-    return [...merchants.values()]
-      .sort((first, second) => second.count - first.count)
-      .slice(0, 8);
-  }, [importedFile]);
 
   async function handleFile(file: File | undefined) {
     if (!file) {
@@ -117,6 +99,67 @@ export default function ImportTransactionsPage() {
     event.target.value = "";
   }
 
+  const summary = useMemo(() => {
+    const transactions = importedFile?.transactions ?? [];
+
+    const recognised = transactions.filter(
+      (transaction) => transaction.recognised,
+    );
+
+    const needsReview = transactions.filter(
+      (transaction) => !transaction.recognised,
+    );
+
+    const transfers = transactions.filter(
+      (transaction) => transaction.kind === "transfer",
+    );
+
+    const purchases = transactions.filter(
+      (transaction) =>
+        transaction.kind === "purchase" || transaction.kind === "fee",
+    );
+
+    return {
+      recognised,
+      needsReview,
+      transfers,
+      purchases,
+    };
+  }, [importedFile]);
+
+  const recognisedMerchants = useMemo(() => {
+    const merchants = new Map<
+      string,
+      {
+        name: string;
+        count: number;
+        total: number;
+        kind: TransactionKind;
+      }
+    >();
+
+    summary.recognised.forEach((transaction) => {
+      const existing = merchants.get(transaction.merchantName);
+
+      if (existing) {
+        existing.count += 1;
+        existing.total += transaction.amount;
+        return;
+      }
+
+      merchants.set(transaction.merchantName, {
+        name: transaction.merchantName,
+        count: 1,
+        total: transaction.amount,
+        kind: transaction.kind,
+      });
+    });
+
+    return [...merchants.values()]
+      .sort((first, second) => second.count - first.count)
+      .slice(0, 10);
+  }, [summary.recognised]);
+
   const moneyIn =
     importedFile?.transactions
       .filter((transaction) => transaction.amount > 0)
@@ -136,7 +179,7 @@ export default function ImportTransactionsPage() {
       .sort((first, second) =>
         second.postedDate.localeCompare(first.postedDate),
       )
-      .slice(0, 8) ?? [];
+      .slice(0, 10) ?? [];
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-950 sm:px-6 lg:px-8">
@@ -149,8 +192,8 @@ export default function ImportTransactionsPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            Import an AIB transaction export to preview the transactions the
-            finance engine can understand.
+            Import an AIB transaction export to see what the finance engine
+            recognises before anything is applied to your dashboard.
           </p>
         </header>
 
@@ -162,8 +205,8 @@ export default function ImportTransactionsPage() {
               </p>
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Download a transaction export from AIB, then select it below.
-                Nothing is saved or applied to your dashboard yet.
+                Select an AIB transaction export. The file is analysed locally
+                and is not saved yet.
               </p>
 
               <label className="mt-6 inline-flex cursor-pointer items-center justify-center rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800">
@@ -200,25 +243,31 @@ export default function ImportTransactionsPage() {
         {importedFile && (
           <>
             <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <div>
-                <p className="text-sm text-zinc-500">Import complete</p>
+              <p className="text-sm text-zinc-500">Import complete</p>
 
-                <h2 className="mt-1 text-2xl font-semibold text-zinc-950">
-                  {importedFile.transactions.length} transactions found
-                </h2>
+              <h2 className="mt-1 text-2xl font-semibold text-zinc-950">
+                {importedFile.transactions.length} transactions found
+              </h2>
 
-                <p className="mt-2 text-sm text-zinc-500">
-                  The file was parsed and normalised successfully. These
-                  transactions have not yet changed the dashboard.
-                </p>
-              </div>
+              <p className="mt-2 text-sm text-zinc-500">
+                Transactions have been parsed, classified and checked against
+                known merchant aliases.
+              </p>
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl bg-zinc-50 p-4">
-                  <p className="text-sm text-zinc-500">Transactions</p>
+                  <p className="text-sm text-zinc-500">Recognised</p>
 
                   <p className="mt-1 text-2xl font-semibold">
-                    {importedFile.transactions.length}
+                    {summary.recognised.length}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Needs review</p>
+
+                  <p className="mt-1 text-2xl font-semibold">
+                    {summary.needsReview.length}
                   </p>
                 </div>
 
@@ -237,6 +286,16 @@ export default function ImportTransactionsPage() {
                     {formatCurrency(moneyOut)}
                   </p>
                 </div>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-zinc-100 px-3 py-1.5 text-zinc-600">
+                  {summary.transfers.length} transfers excluded from spending
+                </span>
+
+                <span className="rounded-full bg-zinc-100 px-3 py-1.5 text-zinc-600">
+                  {summary.purchases.length} recognised purchases and fees
+                </span>
               </div>
 
               {importedFile.result.warnings.length > 0 && (
@@ -264,14 +323,12 @@ export default function ImportTransactionsPage() {
 
             <section className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <div>
-                  <p className="text-sm text-zinc-500">Detected merchants</p>
+                <p className="text-sm text-zinc-500">Recognised</p>
 
-                  <h2 className="mt-1 text-xl font-semibold">Most frequent</h2>
-                </div>
+                <h2 className="mt-1 text-xl font-semibold">Known merchants</h2>
 
                 <div className="mt-5 divide-y divide-zinc-100">
-                  {merchantSummary.map((merchant) => (
+                  {recognisedMerchants.map((merchant) => (
                     <div
                       key={merchant.name}
                       className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
@@ -286,6 +343,8 @@ export default function ImportTransactionsPage() {
                           {merchant.count === 1
                             ? "transaction"
                             : "transactions"}
+                          {" · "}
+                          {getKindLabel(merchant.kind)}
                         </p>
                       </div>
 
@@ -294,15 +353,19 @@ export default function ImportTransactionsPage() {
                       </p>
                     </div>
                   ))}
+
+                  {recognisedMerchants.length === 0 && (
+                    <p className="py-3 text-sm text-zinc-500">
+                      No known merchants were recognised.
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <div>
-                  <p className="text-sm text-zinc-500">Transaction preview</p>
+                <p className="text-sm text-zinc-500">Transaction preview</p>
 
-                  <h2 className="mt-1 text-xl font-semibold">Most recent</h2>
-                </div>
+                <h2 className="mt-1 text-xl font-semibold">Most recent</h2>
 
                 <div className="mt-5 divide-y divide-zinc-100">
                   {previewTransactions.map((transaction) => (
@@ -310,21 +373,37 @@ export default function ImportTransactionsPage() {
                       key={transaction.id}
                       className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
                     >
-                      <div>
-                        <p className="text-sm font-medium text-zinc-950">
-                          {transaction.merchantName}
-                        </p>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-medium text-zinc-950">
+                            {transaction.merchantName}
+                          </p>
 
-                        <p className="mt-0.5 text-xs text-zinc-500">
+                          <span
+                            className={
+                              transaction.recognised
+                                ? "rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600"
+                                : "rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800"
+                            }
+                          >
+                            {transaction.recognised
+                              ? getKindLabel(transaction.kind)
+                              : "Needs review"}
+                          </span>
+                        </div>
+
+                        <p className="mt-0.5 truncate text-xs text-zinc-500">
                           {formatDate(transaction.postedDate)}
+                          {" · "}
+                          {transaction.rawDescription}
                         </p>
                       </div>
 
                       <p
                         className={
                           transaction.amount >= 0
-                            ? "text-sm font-medium text-emerald-700"
-                            : "text-sm font-medium text-zinc-950"
+                            ? "shrink-0 text-sm font-medium text-emerald-700"
+                            : "shrink-0 text-sm font-medium text-zinc-950"
                         }
                       >
                         {transaction.amount >= 0 ? "+" : "−"}
@@ -335,6 +414,45 @@ export default function ImportTransactionsPage() {
                 </div>
               </div>
             </section>
+
+            {summary.needsReview.length > 0 && (
+              <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+                <p className="text-sm text-zinc-500">Needs attention</p>
+
+                <h2 className="mt-1 text-xl font-semibold">
+                  Unrecognised descriptions
+                </h2>
+
+                <p className="mt-2 text-sm text-zinc-500">
+                  These are valid transactions, but the app does not yet have a
+                  confident merchant rule for them.
+                </p>
+
+                <div className="mt-5 divide-y divide-zinc-100">
+                  {summary.needsReview.slice(0, 10).map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-zinc-950">
+                          {transaction.rawDescription}
+                        </p>
+
+                        <p className="mt-0.5 text-xs text-zinc-500">
+                          {formatDate(transaction.postedDate)}
+                        </p>
+                      </div>
+
+                      <p className="shrink-0 text-sm font-medium text-zinc-700">
+                        {transaction.amount >= 0 ? "+" : "−"}
+                        {formatCurrency(Math.abs(transaction.amount))}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </>
         )}
       </div>

@@ -1,4 +1,5 @@
 export { parseAibCsv } from "./aib";
+
 export {
   parseRevolutCreditCardCsv,
   parseRevolutCsv,
@@ -18,5 +19,7 @@ export type {
   ImportResult,
   ImportSource,
   ImportWarning,
+  MerchantAliasRule,
   NormalisedTransaction,
+  TransactionKind,
 } from "./types";
