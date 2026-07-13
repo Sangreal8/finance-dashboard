@@ -1,17 +1,24 @@
 "use client";
 
 import { type ChangeEvent, useMemo, useState } from "react";
+import { monthlyPlan } from "@/data/monthlyPlan";
 import { normaliseTransactions, parseAibCsv } from "@/lib/import";
+import {
+  buildReconciliationSummary,
+  reconcileCommitments,
+} from "@/lib/reconciliation";
 import type {
   ImportResult,
   NormalisedTransaction,
   TransactionKind,
 } from "@/lib/import";
+import type { ReconciliationSummary } from "@/lib/reconciliation";
 
 interface ImportedFileState {
   fileName: string;
   result: ImportResult;
   transactions: NormalisedTransaction[];
+  reconciliation: ReconciliationSummary;
 }
 
 function formatCurrency(amount: number) {
@@ -79,10 +86,21 @@ export default function ImportTransactionsPage() {
 
       const transactions = normaliseTransactions(result.transactions);
 
+      const matches = reconcileCommitments(
+        monthlyPlan.commitments,
+        transactions,
+        {
+          referenceDate: "2026-07-13",
+        },
+      );
+
+      const reconciliation = buildReconciliationSummary(matches);
+
       setImportedFile({
         fileName: file.name,
         result,
         transactions,
+        reconciliation,
       });
     } catch {
       setError(
@@ -193,7 +211,7 @@ export default function ImportTransactionsPage() {
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
             Import an AIB transaction export to see what the finance engine
-            recognises before anything is applied to your dashboard.
+            recognises and which commitments have already been paid.
           </p>
         </header>
 
@@ -297,28 +315,99 @@ export default function ImportTransactionsPage() {
                   {summary.purchases.length} recognised purchases and fees
                 </span>
               </div>
+            </section>
 
-              {importedFile.result.warnings.length > 0 && (
-                <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm font-medium text-amber-950">
-                    {importedFile.result.warnings.length} import warnings
+            <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+              <p className="text-sm text-zinc-500">Reconciliation</p>
+
+              <h2 className="mt-1 text-2xl font-semibold">
+                Commitments checked
+              </h2>
+
+              <p className="mt-2 text-sm text-zinc-500">
+                Imported transactions were compared with the commitments
+                expected in the current plan.
+              </p>
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Paid</p>
+
+                  <p className="mt-1 text-2xl font-semibold">
+                    {importedFile.reconciliation.paid}
                   </p>
-
-                  <div className="mt-3 space-y-2">
-                    {importedFile.result.warnings
-                      .slice(0, 5)
-                      .map((warning, index) => (
-                        <p
-                          key={`${warning.code}-${warning.row ?? index}`}
-                          className="text-sm text-amber-800"
-                        >
-                          {warning.row ? `Row ${warning.row}: ` : ""}
-                          {warning.message}
-                        </p>
-                      ))}
-                  </div>
                 </div>
-              )}
+
+                <div className="rounded-2xl bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Upcoming</p>
+
+                  <p className="mt-1 text-2xl font-semibold">
+                    {importedFile.reconciliation.upcoming}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Overdue</p>
+
+                  <p className="mt-1 text-2xl font-semibold">
+                    {importedFile.reconciliation.overdue}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Remaining</p>
+
+                  <p className="mt-1 text-2xl font-semibold">
+                    {formatCurrency(
+                      importedFile.reconciliation.remainingAmount,
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 divide-y divide-zinc-100">
+                {importedFile.reconciliation.matches.map((match) => (
+                  <div
+                    key={match.commitment.id}
+                    className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0"
+                  >
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-zinc-950">
+                          {match.commitment.name}
+                        </p>
+
+                        <span
+                          className={
+                            match.status === "paid"
+                              ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800"
+                              : match.status === "overdue"
+                                ? "rounded-full bg-red-100 px-2 py-0.5 text-[11px] text-red-800"
+                                : "rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600"
+                          }
+                        >
+                          {match.status === "paid"
+                            ? "Paid"
+                            : match.status === "overdue"
+                              ? "Overdue"
+                              : "Upcoming"}
+                        </span>
+                      </div>
+
+                      <p className="mt-1 text-xs text-zinc-500">
+                        Due {formatDate(match.commitment.dueDate)}
+                        {match.transaction
+                          ? ` · Matched to ${match.transaction.merchantName}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <p className="text-sm font-medium text-zinc-950">
+                      {formatCurrency(match.commitment.amount)}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </section>
 
             <section className="grid gap-6 lg:grid-cols-2">
@@ -353,12 +442,6 @@ export default function ImportTransactionsPage() {
                       </p>
                     </div>
                   ))}
-
-                  {recognisedMerchants.length === 0 && (
-                    <p className="py-3 text-sm text-zinc-500">
-                      No known merchants were recognised.
-                    </p>
-                  )}
                 </div>
               </div>
 
