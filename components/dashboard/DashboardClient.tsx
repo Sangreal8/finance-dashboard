@@ -9,21 +9,14 @@ import type {
   FinancialPosition,
   Reserve,
 } from "@/lib/finance/types";
-import {
-  clearAibImportSnapshot,
-  loadAibImportSnapshot,
-} from "@/lib/import/storage";
-import { buildLiveFinanceSnapshot } from "@/lib/services/live-finance";
+import { clearAibImportSnapshot } from "@/lib/import";
+import { buildStoredPlanningSnapshot } from "@/lib/planning";
+import type { PlanningDataFreshness } from "@/lib/planning";
 
 interface DashboardClientProps {
   initialPosition: FinancialPosition;
   initialTimeline: FinanceTimelineEvent[];
   reserves: Reserve[];
-}
-
-interface ImportMetadata {
-  importedAt: string;
-  sourceFileName: string;
 }
 
 function formatImportTime(importedAt: string) {
@@ -35,14 +28,12 @@ function formatImportTime(importedAt: string) {
   }).format(new Date(importedAt));
 }
 
-function getReferenceDate() {
-  const now = new Date();
+function getFreshnessLabel(freshness: PlanningDataFreshness) {
+  if (freshness.source !== "aib-import" || !freshness.importedAt) {
+    return null;
+  }
 
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
+  return `Updated from AIB ${formatImportTime(freshness.importedAt)}`;
 }
 
 export function DashboardClient({
@@ -54,38 +45,29 @@ export function DashboardClient({
 
   const [timeline, setTimeline] = useState(initialTimeline);
 
-  const [importMetadata, setImportMetadata] = useState<ImportMetadata | null>(
-    null,
-  );
+  const [dataFreshness, setDataFreshness] = useState<PlanningDataFreshness>({
+    source: "manual",
+  });
 
   useEffect(() => {
-    const importedSnapshot = loadAibImportSnapshot();
+    const snapshot = buildStoredPlanningSnapshot();
 
-    if (!importedSnapshot) {
-      return;
-    }
-
-    const liveSnapshot = buildLiveFinanceSnapshot(
-      importedSnapshot,
-      getReferenceDate(),
-    );
-
-    setPosition(liveSnapshot.position);
-    setTimeline(liveSnapshot.timeline);
-
-    setImportMetadata({
-      importedAt: liveSnapshot.importedAt,
-      sourceFileName: liveSnapshot.sourceFileName,
-    });
+    setPosition(snapshot.position);
+    setTimeline(snapshot.timeline);
+    setDataFreshness(snapshot.dataFreshness);
   }, []);
 
   function resetImportedData() {
     clearAibImportSnapshot();
 
-    setPosition(initialPosition);
-    setTimeline(initialTimeline);
-    setImportMetadata(null);
+    const snapshot = buildStoredPlanningSnapshot();
+
+    setPosition(snapshot.position);
+    setTimeline(snapshot.timeline);
+    setDataFreshness(snapshot.dataFreshness);
   }
+
+  const freshnessLabel = getFreshnessLabel(dataFreshness);
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
@@ -99,11 +81,21 @@ export function DashboardClient({
             </h1>
           </div>
 
-          {importMetadata && (
+          {freshnessLabel && (
             <div className="text-sm text-zinc-500 sm:text-right">
-              <p>
-                Updated from AIB {formatImportTime(importMetadata.importedAt)}
-              </p>
+              <p>{freshnessLabel}</p>
+
+              {dataFreshness.latestTransactionDate && (
+                <p className="mt-1 text-xs">
+                  Latest transaction{" "}
+                  {new Intl.DateTimeFormat("en-IE", {
+                    day: "numeric",
+                    month: "short",
+                  }).format(
+                    new Date(`${dataFreshness.latestTransactionDate}T12:00:00`),
+                  )}
+                </p>
+              )}
 
               <button
                 type="button"
