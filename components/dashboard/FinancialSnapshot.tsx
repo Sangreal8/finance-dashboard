@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  FinancialBreakdownRow,
-  FinancialPosition,
-} from "@/lib/finance/types";
+import type { FinancialPosition } from "@/lib/finance/types";
 
 interface FinancialSnapshotProps {
   position: FinancialPosition;
@@ -18,16 +15,20 @@ function formatCurrency(amount: number) {
   }).format(amount);
 }
 
-function formatBreakdownAmount(row: FinancialBreakdownRow) {
-  if (row.type === "starting" || row.type === "result") {
-    return formatCurrency(row.amount);
+function getPaydayLabel(daysUntilPayday: number) {
+  if (daysUntilPayday === 0) {
+    return "Payday is today";
   }
 
-  return `−${formatCurrency(Math.abs(row.amount))}`;
+  if (daysUntilPayday === 1) {
+    return "1 day until payday";
+  }
+
+  return `${daysUntilPayday} days until payday`;
 }
 
 export function FinancialSnapshot({ position }: FinancialSnapshotProps) {
-  const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+  const [showCalculation, setShowCalculation] = useState(false);
 
   return (
     <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
@@ -60,59 +61,48 @@ export function FinancialSnapshot({ position }: FinancialSnapshotProps) {
           </p>
         </div>
 
-        <button
-          type="button"
-          aria-expanded={isBreakdownOpen}
-          aria-controls="safe-to-spend-breakdown"
-          onClick={() => setIsBreakdownOpen((current) => !current)}
-          className="-m-3 rounded-2xl p-3 text-left transition hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm text-zinc-500">Safe to spend</p>
-
-              <p className="mt-1 text-3xl font-semibold text-zinc-950">
-                {formatCurrency(position.safeToSpend)}
-              </p>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                Keeps {formatCurrency(position.safetyBuffer)} untouched
-              </p>
-            </div>
-
-            <span
-              aria-hidden="true"
-              className={`mt-1 text-sm text-zinc-400 transition-transform ${
-                isBreakdownOpen ? "rotate-180" : ""
-              }`}
-            >
-              ↓
-            </span>
-          </div>
-
-          <p className="mt-3 text-xs font-medium text-zinc-600">
-            {isBreakdownOpen ? "Hide calculation" : "See calculation"}
-          </p>
-        </button>
-
         <div>
-          <p className="text-sm text-zinc-500">Projected month end</p>
+          <p className="text-sm text-zinc-500">Safe to spend</p>
 
           <p className="mt-1 text-3xl font-semibold text-zinc-950">
-            {formatCurrency(position.projectedMonthEnd)}
+            {formatCurrency(position.safeToSpend)}
+          </p>
+
+          <p className="mt-1 text-xs text-zinc-500">
+            Keeps {formatCurrency(position.safetyBuffer)} untouched
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setShowCalculation((current) => !current)}
+            className="mt-2 text-xs font-medium text-zinc-700 hover:text-zinc-950"
+          >
+            {showCalculation ? "Hide calculation" : "See calculation"}
+          </button>
+        </div>
+
+        <div>
+          <p className="text-sm text-zinc-500">Daily budget</p>
+
+          <p className="mt-1 text-3xl font-semibold text-zinc-950">
+            {formatCurrency(position.dailyBudget)}
+            <span className="ml-1 text-base font-medium text-zinc-500">
+              / day
+            </span>
+          </p>
+
+          <p className="mt-1 text-xs text-zinc-500">
+            {getPaydayLabel(position.daysUntilPayday)}
           </p>
         </div>
       </div>
 
-      {isBreakdownOpen && (
-        <div
-          id="safe-to-spend-breakdown"
-          className="mt-6 border-t border-zinc-100 pt-6"
-        >
+      {showCalculation && (
+        <div className="mt-6 border-t border-zinc-100 pt-6">
           <div>
-            <p className="text-sm font-medium text-zinc-950">
+            <h3 className="text-sm font-semibold text-zinc-950">
               How Safe to Spend is calculated
-            </p>
+            </h3>
 
             <p className="mt-1 text-sm text-zinc-500">
               Everything already spoken for is removed from the money available
@@ -120,43 +110,50 @@ export function FinancialSnapshot({ position }: FinancialSnapshotProps) {
             </p>
           </div>
 
-          <div className="mt-5">
-            {position.breakdown.map((row) => {
-              const isResult = row.type === "result";
-
-              return (
+          <div className="mt-5 space-y-4">
+            {position.breakdown
+              .filter((row) => row.type !== "result")
+              .map((row) => (
                 <div
                   key={row.id}
-                  className={
-                    isResult
-                      ? "mt-3 flex items-center justify-between border-t border-zinc-200 pt-4"
-                      : "flex items-center justify-between py-2"
-                  }
+                  className="flex items-center justify-between gap-4 text-sm"
                 >
-                  <p
-                    className={
-                      isResult
-                        ? "font-semibold text-zinc-950"
-                        : "text-sm text-zinc-600"
-                    }
-                  >
-                    {row.label}
-                  </p>
+                  <p className="text-zinc-600">{row.label}</p>
 
-                  <p
-                    className={
-                      isResult
-                        ? "text-lg font-semibold text-zinc-950"
-                        : row.type === "starting"
-                          ? "text-sm font-medium text-zinc-950"
-                          : "text-sm font-medium text-zinc-600"
-                    }
-                  >
-                    {formatBreakdownAmount(row)}
+                  <p className="font-medium text-zinc-950">
+                    {row.amount < 0 ? "−" : ""}
+                    {formatCurrency(Math.abs(row.amount))}
                   </p>
                 </div>
-              );
-            })}
+              ))}
+
+            <div className="flex items-center justify-between gap-4 border-t border-zinc-200 pt-4">
+              <p className="font-semibold text-zinc-950">Safe to spend</p>
+
+              <p className="text-lg font-semibold text-zinc-950">
+                {formatCurrency(position.safeToSpend)}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-2xl bg-zinc-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-zinc-950">
+                  Daily budget
+                </p>
+
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Safe to Spend divided by the time remaining
+                </p>
+              </div>
+
+              <p className="text-sm font-semibold text-zinc-950">
+                {formatCurrency(position.safeToSpend)}
+                {" ÷ "}
+                {Math.max(position.daysUntilPayday, 1)}
+                {" = "}
+                {formatCurrency(position.dailyBudget)}
+              </p>
+            </div>
           </div>
         </div>
       )}

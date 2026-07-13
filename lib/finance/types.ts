@@ -1,10 +1,6 @@
 export type Currency = "EUR" | "GBP";
 
-export type AccountType =
-  | "current"
-  | "savings"
-  | "credit_card"
-  | "investment";
+export type AccountType = "current" | "savings" | "credit_card" | "investment";
 
 export interface Account {
   id: string;
@@ -24,17 +20,9 @@ export type CommitmentType =
   | "savings"
   | "discretionary";
 
-export type RecurrenceFrequency =
-  | "weekly"
-  | "monthly"
-  | "quarterly"
-  | "yearly";
+export type RecurrenceFrequency = "weekly" | "monthly" | "quarterly" | "yearly";
 
-export type AmountStrategy =
-  | "fixed"
-  | "estimated"
-  | "latest"
-  | "average";
+export type AmountStrategy = "fixed" | "estimated" | "latest" | "average";
 
 export type Confidence = "confirmed" | "estimated";
 
@@ -118,14 +106,9 @@ export interface Reserve {
   confidence: Confidence;
 }
 
-export type AllocationSource =
-  | "commitment"
-  | "forecast"
-  | "reserve";
+export type AllocationSource = "commitment" | "forecast" | "reserve";
 
-export type AllocationConfidence =
-  | Confidence
-  | ForecastItem["confidence"];
+export type AllocationConfidence = Confidence | ForecastItem["confidence"];
 
 export interface Allocation {
   id: string;
@@ -139,10 +122,7 @@ export interface Allocation {
   dueDate?: string;
 }
 
-export type FinancialHealth =
-  | "healthy"
-  | "warning"
-  | "critical";
+export type FinancialHealth = "healthy" | "warning" | "critical";
 
 export interface FinancialStatus {
   health: FinancialHealth;
@@ -179,6 +159,9 @@ export interface FinancialPosition {
   safeToSpend: number;
   expectedIncome: number;
   projectedMonthEnd: number;
+
+  daysUntilPayday: number;
+  dailyBudget: number;
 
   breakdown: FinancialBreakdownRow[];
 
