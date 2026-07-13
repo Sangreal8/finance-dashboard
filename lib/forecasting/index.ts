@@ -10,6 +10,16 @@ export {
   buildSpendingProfileSummary,
 } from "./profiles";
 
+export {
+  buildCategoryForecasts,
+  categoryForecastsToPlanItems,
+} from "./forecast";
+
+export type {
+  CategoryForecast,
+  BuildCategoryForecastsArgs,
+} from "./forecast";
+
 export type {
   CategorySpendingProfile,
   SpendingHistoryPeriod,
