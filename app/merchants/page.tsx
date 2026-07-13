@@ -1,13 +1,32 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { buildMerchantLibrarySummary } from "@/lib/merchants";
+import {
+  buildMerchantLibrarySummary,
+  loadMerchantDefinitions,
+  removeMerchantDefinition,
+  saveMerchantDefinition,
+} from "@/lib/merchants";
 import { loadAibImportSnapshot } from "@/lib/import";
 import type {
   MerchantCategory,
+  MerchantDefinition,
   MerchantLibrarySummary,
   MerchantProfile,
 } from "@/lib/merchants";
+
+const merchantCategories: MerchantCategory[] = [
+  "Income",
+  "Groceries",
+  "Bills",
+  "Fuel",
+  "Eating out",
+  "Shopping",
+  "Legal",
+  "Savings",
+  "Other",
+  "Uncategorised",
+];
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IE", {
@@ -24,101 +43,222 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T12:00:00`));
 }
 
-function getCategoryClasses(category: MerchantCategory) {
-  if (category === "Uncategorised") {
-    return "bg-amber-100 text-amber-800";
-  }
-
-  return "bg-zinc-100 text-zinc-600";
+interface MerchantEditorProps {
+  merchant: MerchantProfile;
+  onSave: (definition: MerchantDefinition) => void;
+  onReset: (merchantId: string) => void;
+  onClose: () => void;
 }
 
-function MerchantRow({ merchant }: { merchant: MerchantProfile }) {
+function MerchantEditor({
+  merchant,
+  onSave,
+  onReset,
+  onClose,
+}: MerchantEditorProps) {
+  const [category, setCategory] = useState<MerchantCategory>(merchant.category);
+
+  const [recurring, setRecurring] = useState(merchant.recurring);
+
+  const [includeInForecast, setIncludeInForecast] = useState(
+    merchant.includeInForecast,
+  );
+
+  const [ignored, setIgnored] = useState(merchant.ignored);
+
+  function handleSave() {
+    onSave({
+      merchantId: merchant.id,
+      category,
+      recurring,
+      includeInForecast,
+      ignored,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   return (
-    <article className="grid gap-4 py-5 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] md:items-center">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <h2 className="truncate text-base font-semibold text-zinc-950">
-            {merchant.name}
-          </h2>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/20 p-4 sm:items-center">
+      <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm text-zinc-500">Merchant knowledge</p>
 
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getCategoryClasses(
-              merchant.category,
-            )}`}
+            <h2 className="mt-1 text-2xl font-semibold">{merchant.name}</h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full px-3 py-1 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950"
           >
-            {merchant.category}
-          </span>
-
-          {merchant.recurring && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-              Recurring candidate
-            </span>
-          )}
-
-          {merchant.includeInForecast && (
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-              Forecast
-            </span>
-          )}
+            Close
+          </button>
         </div>
 
-        <p className="mt-1 text-sm text-zinc-500">
-          {merchant.transactionCount}{" "}
-          {merchant.transactionCount === 1 ? "transaction" : "transactions"}
-          {" · "}
-          Last seen {formatDate(merchant.lastSeen)}
-        </p>
-      </div>
+        <div className="mt-6 space-y-5">
+          <label className="block">
+            <span className="text-sm font-medium text-zinc-950">Category</span>
 
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <p className="text-zinc-500">Average outgoing</p>
+            <select
+              value={category}
+              onChange={(event) =>
+                setCategory(event.target.value as MerchantCategory)
+              }
+              className="mt-2 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-zinc-400"
+            >
+              {merchantCategories.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <p className="mt-1 font-medium text-zinc-950">
-            {merchant.outgoingTransactionCount > 0
-              ? formatCurrency(merchant.averageOutgoingAmount)
-              : "—"}
-          </p>
+          <div className="space-y-3">
+            <label className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 p-4">
+              <div>
+                <p className="text-sm font-medium">Recurring merchant</p>
+
+                <p className="mt-1 text-xs text-zinc-500">
+                  Payments from this merchant may represent a repeating cost.
+                </p>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={recurring}
+                onChange={(event) => setRecurring(event.target.checked)}
+                className="h-4 w-4"
+              />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 p-4">
+              <div>
+                <p className="text-sm font-medium">Include in forecasts</p>
+
+                <p className="mt-1 text-xs text-zinc-500">
+                  Historical spending here can inform future spending estimates.
+                </p>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={includeInForecast}
+                onChange={(event) => setIncludeInForecast(event.target.checked)}
+                className="h-4 w-4"
+              />
+            </label>
+
+            <label className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-200 p-4">
+              <div>
+                <p className="text-sm font-medium">Ignore merchant</p>
+
+                <p className="mt-1 text-xs text-zinc-500">
+                  Exclude internal transfers or irrelevant activity from
+                  analysis.
+                </p>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={ignored}
+                onChange={(event) => setIgnored(event.target.checked)}
+                className="h-4 w-4"
+              />
+            </label>
+          </div>
+
+          <div className="rounded-2xl bg-zinc-50 p-4">
+            <p className="text-sm font-medium">What the app knows</p>
+
+            <dl className="mt-3 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="text-zinc-500">Transactions</dt>
+                <dd className="mt-1 font-medium">
+                  {merchant.transactionCount}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-zinc-500">Total spent</dt>
+                <dd className="mt-1 font-medium">
+                  {formatCurrency(merchant.totalSpent)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-zinc-500">First seen</dt>
+                <dd className="mt-1 font-medium">
+                  {formatDate(merchant.firstSeen)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-zinc-500">Last seen</dt>
+                <dd className="mt-1 font-medium">
+                  {formatDate(merchant.lastSeen)}
+                </dd>
+              </div>
+            </dl>
+          </div>
         </div>
 
-        <div>
-          <p className="text-zinc-500">Total spent</p>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-between">
+          <button
+            type="button"
+            onClick={() => onReset(merchant.id)}
+            className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            Reset to inferred
+          </button>
 
-          <p className="mt-1 font-medium text-zinc-950">
-            {merchant.totalSpent > 0
-              ? formatCurrency(merchant.totalSpent)
-              : "—"}
-          </p>
+          <button
+            type="button"
+            onClick={handleSave}
+            className="rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800"
+          >
+            Save merchant
+          </button>
         </div>
       </div>
-
-      <div className="text-sm md:text-right">
-        <p className="text-zinc-500">First seen</p>
-
-        <p className="mt-1 font-medium text-zinc-950">
-          {formatDate(merchant.firstSeen)}
-        </p>
-      </div>
-    </article>
+    </div>
   );
 }
 
 export default function MerchantsPage() {
   const [library, setLibrary] = useState<MerchantLibrarySummary | null>(null);
 
+  const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(
+    null,
+  );
+
   const [search, setSearch] = useState("");
 
   const [showUncategorisedOnly, setShowUncategorisedOnly] = useState(false);
 
-  useEffect(() => {
+  function rebuildLibrary() {
     const importedSnapshot = loadAibImportSnapshot();
 
     if (!importedSnapshot) {
+      setLibrary(null);
       return;
     }
 
-    setLibrary(buildMerchantLibrarySummary(importedSnapshot.transactions));
+    const definitions = loadMerchantDefinitions();
+
+    setLibrary(
+      buildMerchantLibrarySummary(importedSnapshot.transactions, definitions),
+    );
+  }
+
+  useEffect(() => {
+    rebuildLibrary();
   }, []);
+
+  const selectedMerchant =
+    library?.merchants.find((merchant) => merchant.id === selectedMerchantId) ??
+    null;
 
   const filteredMerchants = useMemo(() => {
     if (!library) {
@@ -146,6 +286,20 @@ export default function MerchantsPage() {
     });
   }, [library, search, showUncategorisedOnly]);
 
+  function handleSave(definition: MerchantDefinition) {
+    saveMerchantDefinition(definition);
+
+    rebuildLibrary();
+    setSelectedMerchantId(null);
+  }
+
+  function handleReset(merchantId: string) {
+    removeMerchantDefinition(merchantId);
+
+    rebuildLibrary();
+    setSelectedMerchantId(null);
+  }
+
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -157,8 +311,8 @@ export default function MerchantsPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            A reusable view of the merchants discovered from your imported
-            transactions.
+            Teach the app how merchants should be categorised and used
+            throughout your financial model.
           </p>
         </header>
 
@@ -170,12 +324,12 @@ export default function MerchantsPage() {
 
             <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
               Import an AIB transaction file first. The merchant library will
-              then be generated automatically from the stored transactions.
+              then be generated automatically.
             </p>
 
             <a
               href="/settings/import"
-              className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800"
+              className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800"
             >
               Import transactions
             </a>
@@ -187,7 +341,6 @@ export default function MerchantsPage() {
             <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-zinc-500">Merchants found</p>
-
                 <p className="mt-1 text-3xl font-semibold">
                   {library.totalMerchants}
                 </p>
@@ -195,15 +348,13 @@ export default function MerchantsPage() {
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-zinc-500">Recognised</p>
-
                 <p className="mt-1 text-3xl font-semibold">
                   {library.recognisedMerchants}
                 </p>
               </div>
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-zinc-500">Uncategorised</p>
-
+                <p className="text-sm text-zinc-500">Needs teaching</p>
                 <p className="mt-1 text-3xl font-semibold">
                   {library.uncategorisedMerchants}
                 </p>
@@ -211,7 +362,6 @@ export default function MerchantsPage() {
 
               <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
                 <p className="text-sm text-zinc-500">Forecast contributors</p>
-
                 <p className="mt-1 text-3xl font-semibold">
                   {library.forecastMerchants}
                 </p>
@@ -234,7 +384,7 @@ export default function MerchantsPage() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search merchants"
-                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-zinc-400 focus:border-zinc-400"
+                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
                   />
 
                   <button
@@ -245,29 +395,94 @@ export default function MerchantsPage() {
                     className={
                       showUncategorisedOnly
                         ? "rounded-xl bg-zinc-950 px-3 py-2 text-sm font-medium text-white"
-                        : "rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50"
+                        : "rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
                     }
                   >
-                    Uncategorised only
+                    Needs teaching
                   </button>
                 </div>
               </div>
 
               <div className="mt-6 divide-y divide-zinc-100">
                 {filteredMerchants.map((merchant) => (
-                  <MerchantRow key={merchant.id} merchant={merchant} />
-                ))}
+                  <button
+                    key={merchant.id}
+                    type="button"
+                    onClick={() => setSelectedMerchantId(merchant.id)}
+                    className="grid w-full gap-4 py-5 text-left first:pt-0 last:pb-0 hover:bg-zinc-50 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto] md:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-semibold">
+                          {merchant.name}
+                        </p>
 
-                {filteredMerchants.length === 0 && (
-                  <p className="py-8 text-center text-sm text-zinc-500">
-                    No merchants match the current filters.
-                  </p>
-                )}
+                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600">
+                          {merchant.category}
+                        </span>
+
+                        {merchant.userDefined && (
+                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                            Taught
+                          </span>
+                        )}
+
+                        {merchant.ignored && (
+                          <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] text-zinc-600">
+                            Ignored
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="mt-1 text-sm text-zinc-500">
+                        {merchant.transactionCount}{" "}
+                        {merchant.transactionCount === 1
+                          ? "transaction"
+                          : "transactions"}
+                        {" · "}
+                        Last seen {formatDate(merchant.lastSeen)}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-zinc-500">Average outgoing</p>
+                        <p className="mt-1 font-medium">
+                          {merchant.outgoingTransactionCount > 0
+                            ? formatCurrency(merchant.averageOutgoingAmount)
+                            : "—"}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-zinc-500">Total spent</p>
+                        <p className="mt-1 font-medium">
+                          {merchant.totalSpent > 0
+                            ? formatCurrency(merchant.totalSpent)
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-sm font-medium text-zinc-500 md:text-right">
+                      Edit
+                    </p>
+                  </button>
+                ))}
               </div>
             </section>
           </>
         )}
       </div>
+
+      {selectedMerchant && (
+        <MerchantEditor
+          merchant={selectedMerchant}
+          onSave={handleSave}
+          onReset={handleReset}
+          onClose={() => setSelectedMerchantId(null)}
+        />
+      )}
     </main>
   );
 }

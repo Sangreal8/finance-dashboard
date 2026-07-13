@@ -4,6 +4,7 @@ import type {
 } from "@/lib/import";
 import type {
   MerchantCategory,
+  MerchantDefinition,
   MerchantLibrarySummary,
   MerchantProfile,
 } from "./types";
@@ -27,7 +28,7 @@ interface MerchantAccumulator {
   rawDescriptions: Set<string>;
 }
 
-function createMerchantId(
+export function createMerchantId(
   merchantName: string
 ): string {
   return merchantName
@@ -93,7 +94,8 @@ function inferCategory(
     name.includes("amazon prime") ||
     name.includes("google one") ||
     name.includes("revolut metal") ||
-    name.includes("uber one")
+    name.includes("uber one") ||
+    name.includes("aviva")
   ) {
     return "Bills";
   }
@@ -103,7 +105,9 @@ function inferCategory(
     name.includes("burger king") ||
     name.includes("supermac") ||
     name.includes("coffee") ||
-    name.includes("badger")
+    name.includes("badger") ||
+    name.includes("restaurant") ||
+    name.includes("lounge")
   ) {
     return "Eating out";
   }
@@ -120,14 +124,12 @@ function inferCategory(
   return "Uncategorised";
 }
 
-function inferRecurring(
-  profile: {
-    transactionCount: number;
-    firstSeen: string;
-    lastSeen: string;
-    kind: TransactionKind;
-  }
-): boolean {
+function inferRecurring(profile: {
+  transactionCount: number;
+  firstSeen: string;
+  lastSeen: string;
+  kind: TransactionKind;
+}): boolean {
   if (
     profile.kind === "transfer" ||
     profile.kind === "unknown"
@@ -178,16 +180,50 @@ function shouldIncludeInForecast(
 }
 
 function createProfile(
-  accumulator: MerchantAccumulator
+  accumulator: MerchantAccumulator,
+  definitions: Record<
+    string,
+    MerchantDefinition
+  >
 ): MerchantProfile {
+  const id = createMerchantId(
+    accumulator.name
+  );
+
   const kind = getDominantKind(
     accumulator.kinds
   );
 
-  const category = inferCategory(
+  const inferredCategory = inferCategory(
     accumulator.name,
     kind
   );
+
+  const inferredRecurring =
+    inferRecurring({
+      transactionCount:
+        accumulator.transactionCount,
+      firstSeen: accumulator.firstSeen,
+      lastSeen: accumulator.lastSeen,
+      kind,
+    });
+
+  const definition = definitions[id];
+
+  const category =
+    definition?.category ??
+    inferredCategory;
+
+  const recurring =
+    definition?.recurring ??
+    inferredRecurring;
+
+  const includeInForecast =
+    definition?.includeInForecast ??
+    shouldIncludeInForecast(
+      category,
+      kind
+    );
 
   const averageTransactionAmount =
     accumulator.transactionCount === 0
@@ -201,19 +237,8 @@ function createProfile(
       : accumulator.totalSpent /
         accumulator.outgoingTransactionCount;
 
-  const recurring = inferRecurring({
-    transactionCount:
-      accumulator.transactionCount,
-    firstSeen: accumulator.firstSeen,
-    lastSeen: accumulator.lastSeen,
-    kind,
-  });
-
   return {
-    id: createMerchantId(
-      accumulator.name
-    ),
-
+    id,
     name: accumulator.name,
     category,
     kind,
@@ -227,24 +252,32 @@ function createProfile(
     incomingTransactionCount:
       accumulator.incomingTransactionCount,
 
-    totalSpent: accumulator.totalSpent,
+    totalSpent:
+      accumulator.totalSpent,
+
     totalReceived:
       accumulator.totalReceived,
 
     averageTransactionAmount,
     averageOutgoingAmount,
 
-    firstSeen: accumulator.firstSeen,
-    lastSeen: accumulator.lastSeen,
+    firstSeen:
+      accumulator.firstSeen,
+
+    lastSeen:
+      accumulator.lastSeen,
 
     recurring,
-    includeInForecast:
-      shouldIncludeInForecast(
-        category,
-        kind
-      ),
+    includeInForecast,
 
-    recognised: accumulator.recognised,
+    ignored:
+      definition?.ignored ?? false,
+
+    recognised:
+      accumulator.recognised,
+
+    userDefined:
+      Boolean(definition),
 
     rawDescriptions: [
       ...accumulator.rawDescriptions,
@@ -253,7 +286,11 @@ function createProfile(
 }
 
 export function buildMerchantLibrary(
-  transactions: NormalisedTransaction[]
+  transactions: NormalisedTransaction[],
+  definitions: Record<
+    string,
+    MerchantDefinition
+  > = {}
 ): MerchantProfile[] {
   const merchants = new Map<
     string,
@@ -330,10 +367,14 @@ export function buildMerchantLibrary(
       transactionCount: 1,
 
       outgoingTransactionCount:
-        transaction.amount < 0 ? 1 : 0,
+        transaction.amount < 0
+          ? 1
+          : 0,
 
       incomingTransactionCount:
-        transaction.amount >= 0 ? 1 : 0,
+        transaction.amount >= 0
+          ? 1
+          : 0,
 
       totalSpent:
         transaction.amount < 0
@@ -345,9 +386,8 @@ export function buildMerchantLibrary(
           ? transaction.amount
           : 0,
 
-      totalAbsoluteAmount: Math.abs(
-        transaction.amount
-      ),
+      totalAbsoluteAmount:
+        Math.abs(transaction.amount),
 
       firstSeen:
         transaction.postedDate,
@@ -365,13 +405,35 @@ export function buildMerchantLibrary(
   });
 
   return [...merchants.values()]
-    .map(createProfile)
+    .map((merchant) =>
+      createProfile(
+        merchant,
+        definitions
+      )
+    )
     .sort((first, second) => {
       if (
-        first.recognised !==
-        second.recognised
+        first.ignored !== second.ignored
       ) {
-        return first.recognised ? -1 : 1;
+        return first.ignored ? 1 : -1;
+      }
+
+      if (
+        first.category ===
+          "Uncategorised" &&
+        second.category !==
+          "Uncategorised"
+      ) {
+        return -1;
+      }
+
+      if (
+        first.category !==
+          "Uncategorised" &&
+        second.category ===
+          "Uncategorised"
+      ) {
+        return 1;
       }
 
       return (
@@ -382,15 +444,23 @@ export function buildMerchantLibrary(
 }
 
 export function buildMerchantLibrarySummary(
-  transactions: NormalisedTransaction[]
+  transactions: NormalisedTransaction[],
+  definitions: Record<
+    string,
+    MerchantDefinition
+  > = {}
 ): MerchantLibrarySummary {
   const merchants =
-    buildMerchantLibrary(transactions);
+    buildMerchantLibrary(
+      transactions,
+      definitions
+    );
 
   return {
     merchants,
 
-    totalMerchants: merchants.length,
+    totalMerchants:
+      merchants.length,
 
     recognisedMerchants:
       merchants.filter(
@@ -401,20 +471,29 @@ export function buildMerchantLibrarySummary(
     uncategorisedMerchants:
       merchants.filter(
         (merchant) =>
+          !merchant.ignored &&
           merchant.category ===
-          "Uncategorised"
+            "Uncategorised"
       ).length,
 
     recurringMerchants:
       merchants.filter(
         (merchant) =>
+          !merchant.ignored &&
           merchant.recurring
       ).length,
 
     forecastMerchants:
       merchants.filter(
         (merchant) =>
+          !merchant.ignored &&
           merchant.includeInForecast
+      ).length,
+
+    ignoredMerchants:
+      merchants.filter(
+        (merchant) =>
+          merchant.ignored
       ).length,
   };
 }

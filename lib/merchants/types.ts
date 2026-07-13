@@ -5,6 +5,15 @@ export type MerchantCategory =
   | TransactionCategory
   | "Uncategorised";
 
+export interface MerchantDefinition {
+  merchantId: string;
+  category: MerchantCategory;
+  recurring: boolean;
+  includeInForecast: boolean;
+  ignored: boolean;
+  updatedAt: string;
+}
+
 export interface MerchantProfile {
   id: string;
   name: string;
@@ -26,7 +35,10 @@ export interface MerchantProfile {
 
   recurring: boolean;
   includeInForecast: boolean;
+  ignored: boolean;
+
   recognised: boolean;
+  userDefined: boolean;
 
   rawDescriptions: string[];
 }
@@ -39,4 +51,5 @@ export interface MerchantLibrarySummary {
   uncategorisedMerchants: number;
   recurringMerchants: number;
   forecastMerchants: number;
+  ignoredMerchants: number;
 }
