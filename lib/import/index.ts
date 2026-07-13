@@ -12,6 +12,16 @@ export {
   normaliseTransactions,
 } from "./normalise";
 
+export {
+  clearAibImportSnapshot,
+  loadAibImportSnapshot,
+  saveAibImportSnapshot,
+} from "./storage";
+
+export type {
+  StoredAibImportSnapshot,
+} from "./storage";
+
 export type {
   CsvRow,
   ImportAccount,

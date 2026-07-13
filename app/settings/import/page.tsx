@@ -2,7 +2,11 @@
 
 import { type ChangeEvent, useMemo, useState } from "react";
 import { monthlyPlan } from "@/data/monthlyPlan";
-import { normaliseTransactions, parseAibCsv } from "@/lib/import";
+import {
+  normaliseTransactions,
+  parseAibCsv,
+  saveAibImportSnapshot,
+} from "@/lib/import";
 import {
   buildReconciliationSummary,
   reconcileCommitments,
@@ -85,6 +89,8 @@ export default function ImportTransactionsPage() {
       }
 
       const transactions = normaliseTransactions(result.transactions);
+
+      saveAibImportSnapshot(file.name, transactions);
 
       const matches = reconcileCommitments(
         monthlyPlan.commitments,
@@ -224,7 +230,7 @@ export default function ImportTransactionsPage() {
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
                 Select an AIB transaction export. The file is analysed locally
-                and is not saved yet.
+                and saved in this browser for the dashboard.
               </p>
 
               <label className="mt-6 inline-flex cursor-pointer items-center justify-center rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800">
@@ -268,8 +274,8 @@ export default function ImportTransactionsPage() {
               </h2>
 
               <p className="mt-2 text-sm text-zinc-500">
-                Transactions have been parsed, classified and checked against
-                known merchant aliases.
+                The latest AIB balance and reconciled commitments are now
+                available to the dashboard.
               </p>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
