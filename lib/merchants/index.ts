@@ -5,6 +5,12 @@ export {
 } from "./library";
 
 export {
+  applyDefinitionsToTransactions,
+  enrichTransaction,
+  enrichTransactions,
+} from "./enrich";
+
+export {
   clearMerchantDefinitions,
   loadMerchantDefinitions,
   removeMerchantDefinition,
@@ -12,6 +18,7 @@ export {
 } from "./storage";
 
 export type {
+  EnrichedTransaction,
   MerchantCategory,
   MerchantDefinition,
   MerchantLibrarySummary,

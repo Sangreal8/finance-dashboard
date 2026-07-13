@@ -1,5 +1,10 @@
-import type { TransactionKind } from "@/lib/import";
-import type { TransactionCategory } from "@/types/transaction";
+import type {
+  NormalisedTransaction,
+  TransactionKind,
+} from "@/lib/import";
+import type {
+  TransactionCategory,
+} from "@/types/transaction";
 
 export type MerchantCategory =
   | TransactionCategory
@@ -52,4 +57,14 @@ export interface MerchantLibrarySummary {
   recurringMerchants: number;
   forecastMerchants: number;
   ignoredMerchants: number;
+}
+
+export interface EnrichedTransaction
+  extends NormalisedTransaction {
+  merchantId: string;
+  category: MerchantCategory;
+  recurring: boolean;
+  includeInForecast: boolean;
+  ignored: boolean;
+  userDefined: boolean;
 }
