@@ -5,6 +5,7 @@ import { monthlyPlan } from "@/data/monthlyPlan";
 import {
   normaliseTransactions,
   parseAibCsv,
+  parseRevolutWorkbook,
   readXlsxWorkbook,
   saveAibImportSnapshot,
 } from "@/lib/import";
@@ -16,33 +17,20 @@ import type {
   ImportResult,
   NormalisedTransaction,
   TransactionKind,
-  XlsxWorkbook,
 } from "@/lib/import";
 import type { ReconciliationSummary } from "@/lib/reconciliation";
-
-interface RevolutWorkbookState {
-  fileName: string;
-  workbook: XlsxWorkbook;
-}
-
-const REVOLUT_REQUIRED_HEADERS = [
-  "Type",
-  "Product",
-  "Started Date",
-  "Completed Date",
-  "Description",
-  "Amount",
-  "Fee",
-  "Currency",
-  "State",
-  "Balance",
-];
 
 interface ImportedFileState {
   fileName: string;
   result: ImportResult;
   transactions: NormalisedTransaction[];
   reconciliation: ReconciliationSummary;
+}
+
+interface RevolutImportState {
+  fileName: string;
+  result: ImportResult;
+  transactions: NormalisedTransaction[];
 }
 
 function formatCurrency(amount: number) {
@@ -60,24 +48,6 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T12:00:00`));
 }
 
-function formatPreviewValue(value: unknown) {
-  if (value instanceof Date) {
-    return new Intl.DateTimeFormat("en-IE", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(value);
-  }
-
-  if (value === null || value === undefined || value === "") {
-    return "—";
-  }
-
-  return String(value);
-}
-
 function getKindLabel(kind: TransactionKind) {
   const labels: Record<TransactionKind, string> = {
     purchase: "Purchase",
@@ -91,6 +61,26 @@ function getKindLabel(kind: TransactionKind) {
   return labels[kind];
 }
 
+function getKindBadgeClass(kind: TransactionKind) {
+  if (kind === "purchase") {
+    return "bg-blue-100 text-blue-800";
+  }
+
+  if (kind === "transfer") {
+    return "bg-zinc-100 text-zinc-600";
+  }
+
+  if (kind === "fee") {
+    return "bg-amber-100 text-amber-800";
+  }
+
+  if (kind === "income" || kind === "refund") {
+    return "bg-emerald-100 text-emerald-800";
+  }
+
+  return "bg-red-100 text-red-800";
+}
+
 export default function ImportTransactionsPage() {
   const [importedFile, setImportedFile] = useState<ImportedFileState | null>(
     null,
@@ -100,8 +90,9 @@ export default function ImportTransactionsPage() {
 
   const [isReading, setIsReading] = useState(false);
 
-  const [revolutWorkbook, setRevolutWorkbook] =
-    useState<RevolutWorkbookState | null>(null);
+  const [revolutImport, setRevolutImport] = useState<RevolutImportState | null>(
+    null,
+  );
 
   const [revolutError, setRevolutError] = useState<string | null>(null);
 
@@ -176,7 +167,7 @@ export default function ImportTransactionsPage() {
     }
 
     setRevolutError(null);
-    setRevolutWorkbook(null);
+    setRevolutImport(null);
 
     if (!file.name.toLowerCase().endsWith(".xlsx")) {
       setRevolutError(
@@ -190,32 +181,24 @@ export default function ImportTransactionsPage() {
 
     try {
       const workbook = await readXlsxWorkbook(file);
+      const result = parseRevolutWorkbook(workbook);
 
-      const missingHeaders = REVOLUT_REQUIRED_HEADERS.filter(
-        (header) => !workbook.headers.includes(header),
-      );
+      if (result.transactions.length === 0) {
+        const parserMessage =
+          result.warnings[0]?.message ??
+          "No transactions were found in the Revolut statement.";
 
-      if (missingHeaders.length > 0) {
-        setRevolutError(
-          `This does not look like a Revolut account statement. Missing columns: ${missingHeaders.join(
-            ", ",
-          )}.`,
-        );
+        setRevolutError(parserMessage);
 
         return;
       }
 
-      if (workbook.rows.length === 0) {
-        setRevolutError(
-          "The workbook was read, but it does not contain any transactions.",
-        );
+      const transactions = normaliseTransactions(result.transactions);
 
-        return;
-      }
-
-      setRevolutWorkbook({
+      setRevolutImport({
         fileName: file.name,
-        workbook,
+        result,
+        transactions,
       });
     } catch (workbookError) {
       setRevolutError(
@@ -261,6 +244,48 @@ export default function ImportTransactionsPage() {
       purchases,
     };
   }, [importedFile]);
+
+  const revolutSummary = useMemo(() => {
+    const transactions = revolutImport?.transactions ?? [];
+
+    const moneyIn = transactions
+      .filter((transaction) => transaction.amount > 0)
+      .reduce((total, transaction) => total + transaction.amount, 0);
+
+    const moneyOut = transactions
+      .filter((transaction) => transaction.amount < 0)
+      .reduce((total, transaction) => total + Math.abs(transaction.amount), 0);
+
+    const transfers = transactions.filter(
+      (transaction) => transaction.kind === "transfer",
+    );
+
+    const purchases = transactions.filter(
+      (transaction) => transaction.kind === "purchase",
+    );
+
+    const fees = transactions.filter(
+      (transaction) => transaction.kind === "fee",
+    );
+
+    const refunds = transactions.filter(
+      (transaction) => transaction.kind === "refund",
+    );
+
+    const needsReview = transactions.filter(
+      (transaction) => transaction.kind === "unknown",
+    );
+
+    return {
+      moneyIn,
+      moneyOut,
+      transfers,
+      purchases,
+      fees,
+      refunds,
+      needsReview,
+    };
+  }, [revolutImport]);
 
   const recognisedMerchants = useMemo(() => {
     const merchants = new Map<
@@ -317,6 +342,14 @@ export default function ImportTransactionsPage() {
       )
       .slice(0, 10) ?? [];
 
+  const revolutPreviewTransactions =
+    revolutImport?.transactions
+      .slice()
+      .sort((first, second) =>
+        second.postedDate.localeCompare(first.postedDate),
+      )
+      .slice(0, 10) ?? [];
+
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
@@ -328,9 +361,8 @@ export default function ImportTransactionsPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            Import AIB transactions into the finance engine, or test that an
-            official Revolut XLSX statement can be read before we wire in the
-            full Revolut importer.
+            Import AIB transactions into the finance engine, or preview a parsed
+            Revolut account statement before saving it to the dashboard.
           </p>
         </header>
 
@@ -381,17 +413,17 @@ export default function ImportTransactionsPage() {
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 text-center">
             <div className="mx-auto max-w-md">
               <p className="text-lg font-semibold text-zinc-950">
-                Test Revolut XLSX
+                Preview Revolut XLSX
               </p>
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
-                This first step only reads and validates the workbook locally.
-                It does not import, save, or display Revolut transactions
-                elsewhere in the app yet.
+                Read and parse an official Revolut account statement locally.
+                This preview does not save Revolut transactions to the dashboard
+                yet.
               </p>
 
               <label className="mt-6 inline-flex cursor-pointer items-center justify-center rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800">
-                {isReadingRevolut ? "Reading workbook…" : "Choose XLSX file"}
+                {isReadingRevolut ? "Parsing statement…" : "Choose XLSX file"}
 
                 <input
                   type="file"
@@ -402,9 +434,9 @@ export default function ImportTransactionsPage() {
                 />
               </label>
 
-              {revolutWorkbook && (
+              {revolutImport && (
                 <p className="mt-3 text-xs text-zinc-500">
-                  {revolutWorkbook.fileName}
+                  {revolutImport.fileName}
                 </p>
               )}
             </div>
@@ -413,55 +445,227 @@ export default function ImportTransactionsPage() {
           {revolutError && (
             <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
               <p className="text-sm font-medium text-red-900">
-                Workbook test unsuccessful
+                Revolut preview unsuccessful
               </p>
 
               <p className="mt-1 text-sm text-red-700">{revolutError}</p>
             </div>
           )}
 
-          {revolutWorkbook && (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-              <p className="text-sm font-medium text-emerald-950">
-                Revolut workbook read successfully
-              </p>
+          {revolutImport && (
+            <div className="mt-6 space-y-6">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+                <p className="text-sm font-medium text-emerald-950">
+                  Revolut statement parsed successfully
+                </p>
 
-              <p className="mt-1 text-sm text-emerald-800">
-                {revolutWorkbook.workbook.rows.length} data rows and{" "}
-                {revolutWorkbook.workbook.headers.length} columns found.
-              </p>
-
-              <div className="mt-4 overflow-x-auto rounded-xl border border-emerald-200 bg-white">
-                <table className="min-w-full divide-y divide-zinc-200 text-left text-xs">
-                  <thead className="bg-zinc-50">
-                    <tr>
-                      {revolutWorkbook.workbook.headers.map((header) => (
-                        <th
-                          key={header}
-                          className="whitespace-nowrap px-3 py-2 font-medium text-zinc-600"
-                        >
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <tr>
-                      {revolutWorkbook.workbook.headers.map((header) => (
-                        <td
-                          key={header}
-                          className="whitespace-nowrap px-3 py-2 text-zinc-700"
-                        >
-                          {formatPreviewValue(
-                            revolutWorkbook.workbook.rows[0]?.[header],
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
+                <p className="mt-1 text-sm text-emerald-800">
+                  {revolutImport.transactions.length} transactions were
+                  converted into the finance dashboard format.
+                </p>
               </div>
+
+              <div>
+                <p className="text-sm text-zinc-500">Revolut preview</p>
+
+                <h2 className="mt-1 text-2xl font-semibold">
+                  Statement summary
+                </h2>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-2xl bg-zinc-50 p-4">
+                    <p className="text-sm text-zinc-500">Transactions</p>
+
+                    <p className="mt-1 text-2xl font-semibold">
+                      {revolutImport.transactions.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-zinc-50 p-4">
+                    <p className="text-sm text-zinc-500">Accounts</p>
+
+                    <p className="mt-1 text-2xl font-semibold">
+                      {revolutImport.result.accounts.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-zinc-50 p-4">
+                    <p className="text-sm text-zinc-500">Money in</p>
+
+                    <p className="mt-1 text-2xl font-semibold">
+                      {formatCurrency(revolutSummary.moneyIn)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-zinc-50 p-4">
+                    <p className="text-sm text-zinc-500">Money out</p>
+
+                    <p className="mt-1 text-2xl font-semibold">
+                      {formatCurrency(revolutSummary.moneyOut)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="rounded-2xl border border-zinc-200 p-4">
+                    <p className="text-sm text-zinc-500">Transfers</p>
+
+                    <p className="mt-1 text-xl font-semibold">
+                      {revolutSummary.transfers.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-200 p-4">
+                    <p className="text-sm text-zinc-500">Purchases</p>
+
+                    <p className="mt-1 text-xl font-semibold">
+                      {revolutSummary.purchases.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-200 p-4">
+                    <p className="text-sm text-zinc-500">Fees</p>
+
+                    <p className="mt-1 text-xl font-semibold">
+                      {revolutSummary.fees.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-200 p-4">
+                    <p className="text-sm text-zinc-500">Refunds</p>
+
+                    <p className="mt-1 text-xl font-semibold">
+                      {revolutSummary.refunds.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-200 p-4">
+                    <p className="text-sm text-zinc-500">Warnings</p>
+
+                    <p className="mt-1 text-xl font-semibold">
+                      {revolutImport.result.warnings.length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 p-5">
+                <p className="text-sm text-zinc-500">Accounts detected</p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {revolutImport.result.accounts.map((account) => (
+                    <span
+                      key={account.externalAccountId ?? account.name}
+                      className="rounded-full bg-zinc-100 px-3 py-1.5 text-sm text-zinc-700"
+                    >
+                      {account.name} · {account.currency}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-200 p-5">
+                <p className="text-sm text-zinc-500">Transaction preview</p>
+
+                <h3 className="mt-1 text-xl font-semibold">
+                  Most recent Revolut activity
+                </h3>
+
+                <div className="mt-5 divide-y divide-zinc-100">
+                  {revolutPreviewTransactions.map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-medium text-zinc-950">
+                            {transaction.merchantName}
+                          </p>
+
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] ${getKindBadgeClass(
+                              transaction.kind,
+                            )}`}
+                          >
+                            {getKindLabel(transaction.kind)}
+                          </span>
+                        </div>
+
+                        <p className="mt-1 truncate text-xs text-zinc-500">
+                          {formatDate(transaction.postedDate)}
+                          {" · "}
+                          {transaction.rawDescription}
+                        </p>
+
+                        <p className="mt-1 text-xs text-zinc-400">
+                          {transaction.accountId === "revolut-savings"
+                            ? "Revolut Savings"
+                            : "Revolut Current"}
+                        </p>
+                      </div>
+
+                      <p
+                        className={
+                          transaction.amount >= 0
+                            ? "shrink-0 text-sm font-medium text-emerald-700"
+                            : "shrink-0 text-sm font-medium text-zinc-950"
+                        }
+                      >
+                        {transaction.amount >= 0 ? "+" : "−"}
+                        {formatCurrency(Math.abs(transaction.amount))}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {revolutImport.result.warnings.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                  <p className="text-sm font-medium text-amber-950">
+                    Parser warnings
+                  </p>
+
+                  <p className="mt-1 text-sm text-amber-800">
+                    These rows were skipped or imported with limited
+                    classification.
+                  </p>
+
+                  <div className="mt-4 divide-y divide-amber-200">
+                    {revolutImport.result.warnings
+                      .slice(0, 10)
+                      .map((warning, index) => (
+                        <div
+                          key={`${warning.code}-${warning.row ?? "file"}-${index}`}
+                          className="py-3 text-sm text-amber-900 first:pt-0 last:pb-0"
+                        >
+                          {warning.row ? `Row ${warning.row}: ` : ""}
+                          {warning.message}
+                        </div>
+                      ))}
+                  </div>
+
+                  {revolutImport.result.warnings.length > 10 && (
+                    <p className="mt-4 text-xs text-amber-700">
+                      Plus {revolutImport.result.warnings.length - 10}{" "}
+                      additional warnings.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {revolutSummary.needsReview.length > 0 && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+                  <p className="text-sm font-medium text-red-950">
+                    Transactions needing review
+                  </p>
+
+                  <p className="mt-1 text-sm text-red-800">
+                    {revolutSummary.needsReview.length} transactions were
+                    imported with an unknown transaction kind.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </section>
