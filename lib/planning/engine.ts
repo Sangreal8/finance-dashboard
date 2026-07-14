@@ -6,32 +6,21 @@ import {
   buildSpendingProfileSummary,
   categoryForecastsToPlanItems,
 } from "@/lib/forecasting";
-import {
-  buildFinanceTimeline,
-} from "@/lib/finance/planner";
-import {
-  buildFinancialPosition,
-} from "@/lib/finance/position";
+import { buildFinanceTimeline } from "@/lib/finance/planner";
+import { buildFinancialPosition } from "@/lib/finance/position";
 import type {
   Account,
   MonthlyPlan,
   PlannedCommitment,
 } from "@/lib/finance/types";
-import {
-  loadAibImportSnapshot,
-} from "@/lib/import";
-import type {
-  StoredAibImportSnapshot,
-} from "@/lib/import";
+import { loadCombinedImportSnapshot } from "@/lib/import";
+import type { StoredCombinedImportSnapshot } from "@/lib/import";
 import {
   applyDefinitionsToTransactions,
   buildMerchantLibrary,
   loadMerchantDefinitions,
 } from "@/lib/merchants";
-import type {
-  EnrichedTransaction,
-  MerchantProfile,
-} from "@/lib/merchants";
+import type { EnrichedTransaction, MerchantProfile } from "@/lib/merchants";
 import {
   buildReconciliationSummary,
   reconcileCommitments,
@@ -40,70 +29,68 @@ import type {
   ReconciliationMatch,
   ReconciliationSummary,
 } from "@/lib/reconciliation";
-import type {
-  PlanningDataFreshness,
-  PlanningSnapshot,
-} from "./types";
+import type { PlanningDataFreshness, PlanningSnapshot } from "./types";
 
 function formatLocalDate(date: Date): string {
   return [
     date.getFullYear(),
-    String(date.getMonth() + 1).padStart(
-      2,
-      "0"
-    ),
-    String(date.getDate()).padStart(
-      2,
-      "0"
-    ),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
   ].join("-");
 }
 
-function getMonthStart(
-  referenceDate: Date
-): string {
+function getMonthStart(referenceDate: Date): string {
   return formatLocalDate(
-    new Date(
-      referenceDate.getFullYear(),
-      referenceDate.getMonth(),
-      1
-    )
+    new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1),
   );
 }
 
-function getMonthEnd(
-  referenceDate: Date
-): string {
+function getMonthEnd(referenceDate: Date): string {
   return formatLocalDate(
-    new Date(
-      referenceDate.getFullYear(),
-      referenceDate.getMonth() + 1,
-      0
-    )
+    new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0),
   );
 }
 
-function updateAibBalance(
+function updateImportedBalances(
   currentAccounts: Account[],
-  latestBalance?: number
+  importedSnapshot: StoredCombinedImportSnapshot,
 ): Account[] {
-  if (latestBalance === undefined) {
-    return currentAccounts;
-  }
+  const latestAibBalance = importedSnapshot.aib?.latestBalance;
 
-  return currentAccounts.map((account) =>
-    account.id === "aib-current"
-      ? {
-          ...account,
-          balance: latestBalance,
-        }
-      : account
-  );
+  const latestRevolutCurrentBalance =
+    importedSnapshot.revolut?.latestBalances["revolut-current"];
+
+  return currentAccounts.map((account) => {
+    if (account.id === "aib-current" && latestAibBalance !== undefined) {
+      return {
+        ...account,
+        balance: latestAibBalance,
+      };
+    }
+
+    if (
+      account.id === "revolut-current" &&
+      latestRevolutCurrentBalance !== undefined
+    ) {
+      return {
+        ...account,
+        balance: latestRevolutCurrentBalance,
+      };
+    }
+
+    /**
+     * The Revolut export exposes Savings as one aggregate product.
+     * It cannot reliably split that balance between the Solicitors
+     * and Sweepstake pockets, so those manually maintained balances
+     * deliberately remain untouched.
+     */
+    return account;
+  });
 }
 
 function applyReconciliationMatch(
   commitment: PlannedCommitment,
-  match: ReconciliationMatch | undefined
+  match: ReconciliationMatch | undefined,
 ): PlannedCommitment {
   if (!match) {
     return commitment;
@@ -113,8 +100,7 @@ function applyReconciliationMatch(
     return {
       ...commitment,
       status: "paid",
-      matchedTransactionId:
-        match.transaction?.id,
+      matchedTransactionId: match.transaction?.id,
     };
   }
 
@@ -143,13 +129,10 @@ function applyReconciliationMatch(
 
 function buildReconciledPlan(
   basePlan: MonthlyPlan,
-  matches: ReconciliationMatch[]
+  matches: ReconciliationMatch[],
 ): MonthlyPlan {
   const matchesByCommitmentId = new Map(
-    matches.map((match) => [
-      match.commitment.id,
-      match,
-    ])
+    matches.map((match) => [match.commitment.id, match]),
   );
 
   return {
@@ -157,93 +140,68 @@ function buildReconciledPlan(
 
     /**
      * Manual forecast items deliberately remain active.
-     * Calculated forecasts are exposed separately in the
-     * PlanningSnapshot until they are sufficiently reliable.
+     * Calculated forecasts are exposed separately until
+     * they are sufficiently reliable.
      */
     forecastItems: basePlan.forecastItems,
 
-    commitments: basePlan.commitments.map(
-      (commitment) =>
-        applyReconciliationMatch(
-          commitment,
-          matchesByCommitmentId.get(
-            commitment.id
-          )
-        )
+    commitments: basePlan.commitments.map((commitment) =>
+      applyReconciliationMatch(
+        commitment,
+        matchesByCommitmentId.get(commitment.id),
+      ),
     ),
   };
 }
 
 function getLatestTransactionDate(
-  importedSnapshot: StoredAibImportSnapshot
+  importedSnapshot: StoredCombinedImportSnapshot,
 ): string | undefined {
-  if (
-    importedSnapshot.transactions.length ===
-    0
-  ) {
+  if (importedSnapshot.transactions.length === 0) {
     return undefined;
   }
 
   return importedSnapshot.transactions.reduce(
     (latestDate, transaction) =>
-      transaction.postedDate > latestDate
-        ? transaction.postedDate
-        : latestDate,
-    importedSnapshot.transactions[0]
-      .postedDate
+      transaction.postedDate > latestDate ? transaction.postedDate : latestDate,
+    importedSnapshot.transactions[0].postedDate,
   );
 }
 
 function getLatestBalanceDate(
-  importedSnapshot: StoredAibImportSnapshot
+  importedSnapshot: StoredCombinedImportSnapshot,
 ): string | undefined {
-  const transactionsWithBalances =
-    importedSnapshot.transactions.filter(
-      (transaction) =>
-        typeof transaction.balanceAfter ===
-        "number"
-    );
+  const transactionsWithBalances = importedSnapshot.transactions.filter(
+    (transaction) => typeof transaction.balanceAfter === "number",
+  );
 
-  if (
-    transactionsWithBalances.length === 0
-  ) {
+  if (transactionsWithBalances.length === 0) {
     return undefined;
   }
 
   return transactionsWithBalances.reduce(
     (latestDate, transaction) =>
-      transaction.postedDate > latestDate
-        ? transaction.postedDate
-        : latestDate,
-    transactionsWithBalances[0].postedDate
+      transaction.postedDate > latestDate ? transaction.postedDate : latestDate,
+    transactionsWithBalances[0].postedDate,
   );
 }
 
 function buildImportedFreshness(
-  importedSnapshot: StoredAibImportSnapshot
+  importedSnapshot: StoredCombinedImportSnapshot,
 ): PlanningDataFreshness {
   return {
-    source: "aib-import",
-    importedAt:
-      importedSnapshot.importedAt,
-    sourceFileName:
-      importedSnapshot.fileName,
-    latestTransactionDate:
-      getLatestTransactionDate(
-        importedSnapshot
-      ),
-    latestBalanceDate:
-      getLatestBalanceDate(
-        importedSnapshot
-      ),
+    source: "combined-import",
+    importedAt: importedSnapshot.importedAt,
+    sourceFileNames: importedSnapshot.sourceFileNames,
+    latestTransactionDate: getLatestTransactionDate(importedSnapshot),
+    latestBalanceDate: getLatestBalanceDate(importedSnapshot),
+    includesAib: importedSnapshot.aib !== null,
+    includesRevolut: importedSnapshot.revolut !== null,
   };
 }
 
-function buildManualPlanningSnapshot(
-  referenceDate: Date
-): PlanningSnapshot {
-  const referenceDateString =
-    formatLocalDate(referenceDate);
+function buildManualPlanningSnapshot(referenceDate: Date): PlanningSnapshot {
+  const referenceDateString = formatLocalDate(referenceDate);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -257,16 +215,9 @@ function buildManualPlanningSnapshot(
     plan: monthlyPlan,
     reserves,
 
-    position: buildFinancialPosition(
-      accounts,
-      monthlyPlan,
-      reserves
-    ),
+    position: buildFinancialPosition(accounts, monthlyPlan, reserves),
 
-    timeline: buildFinanceTimeline(
-      accounts,
-      monthlyPlan
-    ),
+    timeline: buildFinanceTimeline(accounts, monthlyPlan),
 
     importedSnapshot: null,
 
@@ -292,23 +243,20 @@ interface ImportedKnowledge {
 }
 
 function buildImportedKnowledge(
-  importedSnapshot: StoredAibImportSnapshot
+  importedSnapshot: StoredCombinedImportSnapshot,
 ): ImportedKnowledge {
-  const definitions =
-    loadMerchantDefinitions();
+  const definitions = loadMerchantDefinitions();
 
-  const merchantProfiles =
-    buildMerchantLibrary(
-      importedSnapshot.transactions,
-      definitions
-    );
+  const merchantProfiles = buildMerchantLibrary(
+    importedSnapshot.transactions,
+    definitions,
+  );
 
-  const transactions =
-    applyDefinitionsToTransactions(
-      importedSnapshot.transactions,
-      definitions,
-      merchantProfiles
-    );
+  const transactions = applyDefinitionsToTransactions(
+    importedSnapshot.transactions,
+    definitions,
+    merchantProfiles,
+  );
 
   return {
     merchantProfiles,
@@ -317,97 +265,57 @@ function buildImportedKnowledge(
 }
 
 function buildImportedPlanningSnapshot(
-  importedSnapshot: StoredAibImportSnapshot,
-  referenceDate: Date
+  importedSnapshot: StoredCombinedImportSnapshot,
+  referenceDate: Date,
 ): PlanningSnapshot {
-  const referenceDateString =
-    formatLocalDate(referenceDate);
+  const referenceDateString = formatLocalDate(referenceDate);
 
-  const liveAccounts = updateAibBalance(
-    accounts,
-    importedSnapshot.latestBalance
+  const liveAccounts = updateImportedBalances(accounts, importedSnapshot);
+
+  const reconciliationMatches = reconcileCommitments(
+    monthlyPlan.commitments,
+    importedSnapshot.transactions,
+    {
+      referenceDate: referenceDateString,
+    },
   );
 
-  const reconciliationMatches =
-    reconcileCommitments(
-      monthlyPlan.commitments,
-      importedSnapshot.transactions,
-      {
-        referenceDate:
-          referenceDateString,
-      }
-    );
-
-  const reconciliation:
-    ReconciliationSummary =
-      buildReconciliationSummary(
-        reconciliationMatches
-      );
-
-  const livePlan = buildReconciledPlan(
-    monthlyPlan,
-    reconciliationMatches
+  const reconciliation: ReconciliationSummary = buildReconciliationSummary(
+    reconciliationMatches,
   );
 
-  const {
-    merchantProfiles,
+  const livePlan = buildReconciledPlan(monthlyPlan, reconciliationMatches);
+
+  const { merchantProfiles, transactions } =
+    buildImportedKnowledge(importedSnapshot);
+
+  const spendingProfiles = buildSpendingProfileSummary(transactions);
+
+  const calculatedForecasts = buildCategoryForecasts({
+    profiles: spendingProfiles.profiles,
     transactions,
-  } = buildImportedKnowledge(
-    importedSnapshot
+    periodStartDate: getMonthStart(referenceDate),
+    periodEndDate: getMonthEnd(referenceDate),
+  });
+
+  const eligibleForecasts = categoryForecastsToPlanItems(
+    calculatedForecasts,
+    "medium",
   );
-
-  const spendingProfiles =
-    buildSpendingProfileSummary(
-      transactions
-    );
-
-  const calculatedForecasts =
-    buildCategoryForecasts({
-      profiles:
-        spendingProfiles.profiles,
-      transactions,
-      periodStartDate:
-        getMonthStart(referenceDate),
-      periodEndDate:
-        getMonthEnd(referenceDate),
-    });
-
-  /**
-   * Only medium- or high-confidence calculated
-   * forecasts are considered eligible.
-   *
-   * They are not yet applied to the active plan.
-   */
-  const eligibleForecasts =
-    categoryForecastsToPlanItems(
-      calculatedForecasts,
-      "medium"
-    );
 
   return {
     generatedAt: new Date().toISOString(),
-    referenceDate:
-      referenceDateString,
+    referenceDate: referenceDateString,
 
-    dataFreshness:
-      buildImportedFreshness(
-        importedSnapshot
-      ),
+    dataFreshness: buildImportedFreshness(importedSnapshot),
 
     accounts: liveAccounts,
     plan: livePlan,
     reserves,
 
-    position: buildFinancialPosition(
-      liveAccounts,
-      livePlan,
-      reserves
-    ),
+    position: buildFinancialPosition(liveAccounts, livePlan, reserves),
 
-    timeline: buildFinanceTimeline(
-      liveAccounts,
-      livePlan
-    ),
+    timeline: buildFinanceTimeline(liveAccounts, livePlan),
 
     importedSnapshot,
 
@@ -417,10 +325,8 @@ function buildImportedPlanningSnapshot(
 
     forecasts: {
       active: livePlan.forecastItems,
-      calculated:
-        calculatedForecasts,
-      eligible:
-        eligibleForecasts,
+      calculated: calculatedForecasts,
+      eligible: eligibleForecasts,
       mode: "manual",
     },
 
@@ -430,25 +336,19 @@ function buildImportedPlanningSnapshot(
 
 /**
  * Builds the complete planning state from the
- * best locally available source.
+ * best locally available import data.
  *
  * This function reads browser storage and must
  * therefore be called from client-side code.
  */
 export function buildStoredPlanningSnapshot(
-  referenceDate = new Date()
+  referenceDate = new Date(),
 ): PlanningSnapshot {
-  const importedSnapshot =
-    loadAibImportSnapshot();
+  const importedSnapshot = loadCombinedImportSnapshot();
 
   if (!importedSnapshot) {
-    return buildManualPlanningSnapshot(
-      referenceDate
-    );
+    return buildManualPlanningSnapshot(referenceDate);
   }
 
-  return buildImportedPlanningSnapshot(
-    importedSnapshot,
-    referenceDate
-  );
+  return buildImportedPlanningSnapshot(importedSnapshot, referenceDate);
 }

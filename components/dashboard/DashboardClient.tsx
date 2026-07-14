@@ -11,7 +11,10 @@ import type {
   FinancialPosition,
   Reserve,
 } from "@/lib/finance/types";
-import { clearAibImportSnapshot } from "@/lib/import";
+import {
+  clearAibImportSnapshot,
+  clearRevolutImportSnapshot,
+} from "@/lib/import";
 import { buildStoredPlanningSnapshot } from "@/lib/planning";
 import type { PlanningDataFreshness } from "@/lib/planning";
 
@@ -30,12 +33,30 @@ function formatImportTime(importedAt: string) {
   }).format(new Date(importedAt));
 }
 
+function getSourceLabel(freshness: PlanningDataFreshness) {
+  if (freshness.includesAib && freshness.includesRevolut) {
+    return "AIB + Revolut";
+  }
+
+  if (freshness.includesAib) {
+    return "AIB";
+  }
+
+  if (freshness.includesRevolut) {
+    return "Revolut";
+  }
+
+  return "imported data";
+}
+
 function getFreshnessLabel(freshness: PlanningDataFreshness) {
-  if (freshness.source !== "aib-import" || !freshness.importedAt) {
+  if (freshness.source !== "combined-import" || !freshness.importedAt) {
     return null;
   }
 
-  return `Updated from AIB ${formatImportTime(freshness.importedAt)}`;
+  return `Updated from ${getSourceLabel(freshness)} ${formatImportTime(
+    freshness.importedAt,
+  )}`;
 }
 
 export function DashboardClient({
@@ -52,6 +73,7 @@ export function DashboardClient({
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       const builtSnapshot = buildStoredPlanningSnapshot();
+
       setSnapshot({
         position: builtSnapshot.position,
         timeline: builtSnapshot.timeline,
@@ -64,6 +86,7 @@ export function DashboardClient({
 
   function refreshSnapshot() {
     const builtSnapshot = buildStoredPlanningSnapshot();
+
     setSnapshot({
       position: builtSnapshot.position,
       timeline: builtSnapshot.timeline,
@@ -73,14 +96,18 @@ export function DashboardClient({
 
   function resetImportedData() {
     clearAibImportSnapshot();
+    clearRevolutImportSnapshot();
     refreshSnapshot();
   }
 
   const position = snapshot?.position ?? initialPosition;
+
   const timeline = snapshot?.timeline ?? initialTimeline;
+
   const dataFreshness = snapshot?.dataFreshness ?? {
     source: "manual" as const,
   };
+
   const freshnessLabel = getFreshnessLabel(dataFreshness);
 
   return (

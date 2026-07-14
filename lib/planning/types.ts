@@ -10,27 +10,20 @@ import type {
   MonthlyPlan,
   Reserve,
 } from "@/lib/finance/types";
-import type {
-  StoredAibImportSnapshot,
-} from "@/lib/import";
-import type {
-  EnrichedTransaction,
-  MerchantProfile,
-} from "@/lib/merchants";
-import type {
-  ReconciliationSummary,
-} from "@/lib/reconciliation";
+import type { StoredCombinedImportSnapshot } from "@/lib/import";
+import type { EnrichedTransaction, MerchantProfile } from "@/lib/merchants";
+import type { ReconciliationSummary } from "@/lib/reconciliation";
 
-export type PlanningDataSource =
-  | "manual"
-  | "aib-import";
+export type PlanningDataSource = "manual" | "combined-import";
 
 export interface PlanningDataFreshness {
   source: PlanningDataSource;
   importedAt?: string;
-  sourceFileName?: string;
+  sourceFileNames?: string[];
   latestTransactionDate?: string;
   latestBalanceDate?: string;
+  includesAib?: boolean;
+  includesRevolut?: boolean;
 }
 
 export interface PlanningForecasts {
@@ -68,7 +61,7 @@ export interface PlanningSnapshot {
   position: FinancialPosition;
   timeline: FinanceTimelineEvent[];
 
-  importedSnapshot: StoredAibImportSnapshot | null;
+  importedSnapshot: StoredCombinedImportSnapshot | null;
 
   transactions: EnrichedTransaction[];
   merchantProfiles: MerchantProfile[];

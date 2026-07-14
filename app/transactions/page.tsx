@@ -227,7 +227,7 @@ export default function TransactionsPage() {
     });
   }, [snapshot]);
 
-  const hasImportedData = snapshot?.dataFreshness.source === "aib-import";
+  const hasImportedData = snapshot?.dataFreshness.source === "combined-import";
 
   const filteredTransactions = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
@@ -254,6 +254,7 @@ export default function TransactionsPage() {
         transaction.normalisedDescription,
         transaction.category,
         transaction.accountId,
+        transaction.source,
       ].some((value) => value.toLowerCase().includes(searchTerm));
     });
   }, [transactions, search, filter, selectedCategory]);
@@ -303,7 +304,7 @@ export default function TransactionsPage() {
           </h2>
 
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
-            Import an AIB transaction export to populate the live transaction
+            Import an AIB or Revolut statement to populate the live transaction
             history.
           </p>
 
