@@ -23,6 +23,15 @@ export interface StoredRevolutImportSnapshot {
   transactions: NormalisedTransaction[];
 }
 
+export interface StoredCombinedImportSnapshot {
+  source: "combined-import";
+  importedAt: string;
+  sourceFileNames: string[];
+  aib: StoredAibImportSnapshot | null;
+  revolut: StoredRevolutImportSnapshot | null;
+  transactions: NormalisedTransaction[];
+}
+
 function findLatestBalance(
   transactions: NormalisedTransaction[],
 ): number | undefined {
@@ -83,6 +92,16 @@ function findLatestBalancesByAccount(
       accountId,
       transaction.balanceAfter,
     ]),
+  );
+}
+
+function getLatestImportedAt(
+  snapshots: Array<StoredAibImportSnapshot | StoredRevolutImportSnapshot>,
+): string {
+  return snapshots.reduce(
+    (latest, snapshot) =>
+      snapshot.importedAt > latest ? snapshot.importedAt : latest,
+    snapshots[0].importedAt,
   );
 }
 
@@ -207,4 +226,33 @@ export function clearRevolutImportSnapshot() {
   }
 
   window.localStorage.removeItem(REVOLUT_IMPORT_STORAGE_KEY);
+}
+
+export function loadCombinedImportSnapshot(): StoredCombinedImportSnapshot | null {
+  const aib = loadAibImportSnapshot();
+  const revolut = loadRevolutImportSnapshot();
+
+  const availableSnapshots = [aib, revolut].filter(
+    (
+      snapshot,
+    ): snapshot is StoredAibImportSnapshot | StoredRevolutImportSnapshot =>
+      snapshot !== null,
+  );
+
+  if (availableSnapshots.length === 0) {
+    return null;
+  }
+
+  const transactions = ensureUniqueTransactionIds(
+    availableSnapshots.flatMap((snapshot) => snapshot.transactions),
+  );
+
+  return {
+    source: "combined-import",
+    importedAt: getLatestImportedAt(availableSnapshots),
+    sourceFileNames: availableSnapshots.map((snapshot) => snapshot.fileName),
+    aib,
+    revolut,
+    transactions,
+  };
 }

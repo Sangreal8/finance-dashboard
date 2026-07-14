@@ -19,6 +19,7 @@ export {
   clearAibImportSnapshot,
   clearRevolutImportSnapshot,
   loadAibImportSnapshot,
+  loadCombinedImportSnapshot,
   loadRevolutImportSnapshot,
   saveAibImportSnapshot,
   saveRevolutImportSnapshot,
@@ -26,6 +27,7 @@ export {
 
 export type {
   StoredAibImportSnapshot,
+  StoredCombinedImportSnapshot,
   StoredRevolutImportSnapshot,
 } from "./storage";
 

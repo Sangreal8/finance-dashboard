@@ -7,6 +7,7 @@ import {
   removeMerchantDefinition,
   saveMerchantDefinition,
 } from "@/lib/merchants";
+import { loadCombinedImportSnapshot } from "@/lib/import";
 import { loadAibImportSnapshot } from "@/lib/import";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -242,7 +243,7 @@ export default function MerchantsPage() {
   const [showUncategorisedOnly, setShowUncategorisedOnly] = useState(false);
 
   function rebuildLibrary() {
-    const importedSnapshot = loadAibImportSnapshot();
+    const importedSnapshot = loadCombinedImportSnapshot();
 
     if (!importedSnapshot) {
       setLibrary(null);

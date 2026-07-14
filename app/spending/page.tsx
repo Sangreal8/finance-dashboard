@@ -9,7 +9,7 @@ import {
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { buildSpendingProfileSummary } from "@/lib/forecasting";
-import { loadAibImportSnapshot } from "@/lib/import";
+import { loadCombinedImportSnapshot } from "@/lib/import";
 import { CategoryProfileCard } from "@/components/spending/CategoryProfileCard";
 import type {
   SpendingProfileConfidence,
@@ -64,7 +64,7 @@ export default function SpendingPage() {
       return;
     }
 
-    const initialSnapshot = loadAibImportSnapshot();
+    const initialSnapshot = loadCombinedImportSnapshot();
 
     if (!initialSnapshot) {
       return;
@@ -134,8 +134,8 @@ export default function SpendingPage() {
           </h2>
 
           <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
-            Import an AIB transaction file first. Spending profiles will then be
-            generated automatically from recognised and categorised
+            Import an AIB or Revolut transaction file first. Spending profiles
+            will then be generated automatically from recognised and categorised
             transactions.
           </p>
 

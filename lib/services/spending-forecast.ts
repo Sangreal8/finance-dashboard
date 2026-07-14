@@ -6,17 +6,13 @@ import type {
   CategoryForecast,
   SpendingProfileSummary,
 } from "@/lib/forecasting";
-import {
-  loadAibImportSnapshot,
-} from "@/lib/import";
+import { loadCombinedImportSnapshot } from "@/lib/import";
 import {
   applyDefinitionsToTransactions,
   buildMerchantLibrary,
   loadMerchantDefinitions,
 } from "@/lib/merchants";
-import type {
-  EnrichedTransaction,
-} from "@/lib/merchants";
+import type { EnrichedTransaction } from "@/lib/merchants";
 
 export interface SpendingForecastSnapshot {
   transactions: EnrichedTransaction[];
@@ -27,89 +23,56 @@ export interface SpendingForecastSnapshot {
 function formatLocalDate(date: Date) {
   return [
     date.getFullYear(),
-    String(date.getMonth() + 1).padStart(
-      2,
-      "0"
-    ),
-    String(date.getDate()).padStart(
-      2,
-      "0"
-    ),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
   ].join("-");
 }
 
-function getCurrentMonthStart(
-  referenceDate: Date
-) {
+function getCurrentMonthStart(referenceDate: Date) {
   return formatLocalDate(
-    new Date(
-      referenceDate.getFullYear(),
-      referenceDate.getMonth(),
-      1
-    )
+    new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1),
   );
 }
 
-function getCurrentMonthEnd(
-  referenceDate: Date
-) {
+function getCurrentMonthEnd(referenceDate: Date) {
   return formatLocalDate(
-    new Date(
-      referenceDate.getFullYear(),
-      referenceDate.getMonth() + 1,
-      0
-    )
+    new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0),
   );
 }
 
 export function buildStoredSpendingForecast(
-  referenceDate = new Date()
+  referenceDate = new Date(),
 ): SpendingForecastSnapshot | null {
-  const importedSnapshot =
-    loadAibImportSnapshot();
+  const importedSnapshot = loadCombinedImportSnapshot();
 
   if (!importedSnapshot) {
     return null;
   }
 
-  const definitions =
-    loadMerchantDefinitions();
+  const definitions = loadMerchantDefinitions();
 
-  const merchants =
-    buildMerchantLibrary(
-      importedSnapshot.transactions,
-      definitions
-    );
+  const merchants = buildMerchantLibrary(
+    importedSnapshot.transactions,
+    definitions,
+  );
 
-  const transactions =
-    applyDefinitionsToTransactions(
-      importedSnapshot.transactions,
-      definitions,
-      merchants
-    );
+  const transactions = applyDefinitionsToTransactions(
+    importedSnapshot.transactions,
+    definitions,
+    merchants,
+  );
 
-  const spendingProfiles =
-    buildSpendingProfileSummary(
-      transactions
-    );
+  const spendingProfiles = buildSpendingProfileSummary(transactions);
 
-  const forecasts =
-    buildCategoryForecasts({
-      profiles:
-        spendingProfiles.profiles,
+  const forecasts = buildCategoryForecasts({
+    profiles: spendingProfiles.profiles,
 
-      transactions,
+    transactions,
 
-      periodStartDate:
-        getCurrentMonthStart(
-          referenceDate
-        ),
+    periodStartDate: getCurrentMonthStart(referenceDate),
 
-      periodEndDate:
-        getCurrentMonthEnd(
-          referenceDate
-        ),
-    });
+    periodEndDate: getCurrentMonthEnd(referenceDate),
+  });
 
   return {
     transactions,
