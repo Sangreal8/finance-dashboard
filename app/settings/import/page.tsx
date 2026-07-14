@@ -8,6 +8,7 @@ import {
   parseRevolutWorkbook,
   readXlsxWorkbook,
   saveAibImportSnapshot,
+  saveRevolutImportSnapshot,
 } from "@/lib/import";
 import {
   buildReconciliationSummary,
@@ -194,6 +195,8 @@ export default function ImportTransactionsPage() {
       }
 
       const transactions = normaliseTransactions(result.transactions);
+
+      saveRevolutImportSnapshot(file.name, transactions);
 
       setRevolutImport({
         fileName: file.name,
@@ -413,13 +416,12 @@ export default function ImportTransactionsPage() {
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 text-center">
             <div className="mx-auto max-w-md">
               <p className="text-lg font-semibold text-zinc-950">
-                Preview Revolut XLSX
+                Import Revolut XLSX
               </p>
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Read and parse an official Revolut account statement locally.
-                This preview does not save Revolut transactions to the dashboard
-                yet.
+                Import an official Revolut account statement. The file is
+                analysed locally and saved in this browser for the dashboard.
               </p>
 
               <label className="mt-6 inline-flex cursor-pointer items-center justify-center rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800">
@@ -461,7 +463,7 @@ export default function ImportTransactionsPage() {
 
                 <p className="mt-1 text-sm text-emerald-800">
                   {revolutImport.transactions.length} transactions were
-                  converted into the finance dashboard format.
+                  converted and saved locally for the finance dashboard.
                 </p>
               </div>
 

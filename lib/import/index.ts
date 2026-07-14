@@ -17,11 +17,17 @@ export {
 
 export {
   clearAibImportSnapshot,
+  clearRevolutImportSnapshot,
   loadAibImportSnapshot,
+  loadRevolutImportSnapshot,
   saveAibImportSnapshot,
+  saveRevolutImportSnapshot,
 } from "./storage";
 
-export type { StoredAibImportSnapshot } from "./storage";
+export type {
+  StoredAibImportSnapshot,
+  StoredRevolutImportSnapshot,
+} from "./storage";
 
 export type {
   CsvRow,
