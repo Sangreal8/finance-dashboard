@@ -2,8 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import type { PlanningSnapshot } from "@/lib/planning";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { PageShell } from "@/components/ui/PageShell";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { buildStoredPlanningSnapshot } from "@/lib/planning";
 import type { EnrichedTransaction, MerchantCategory } from "@/lib/merchants";
+import { getCategoryPresentation } from "@/lib/ui/category-metadata";
+import { getFriendlyAccountName } from "@/lib/ui/account-display";
 
 type TransactionFilter =
   | "all"
@@ -69,18 +75,19 @@ function getTransactionBadgeClasses(transaction: EnrichedTransaction) {
     transaction.category === "Uncategorised" &&
     transaction.kind !== "transfer"
   ) {
-    return "bg-amber-100 text-amber-800";
+    return "bg-amber-50 text-amber-700";
   }
 
   if (transaction.kind === "transfer") {
-    return "bg-blue-50 text-blue-700";
+    return "bg-sky-50 text-sky-700";
   }
 
   if (transaction.amount > 0) {
     return "bg-emerald-50 text-emerald-700";
   }
 
-  return "bg-zinc-100 text-zinc-600";
+  const presentation = getCategoryPresentation(transaction.category);
+  return `${presentation.badgeClassName}`;
 }
 
 function isSpendingTransaction(transaction: EnrichedTransaction) {
@@ -119,9 +126,10 @@ function matchesPrimaryFilter(
 
 function TransactionRow({ transaction }: { transaction: EnrichedTransaction }) {
   const isPositive = transaction.amount >= 0;
+  const categoryPresentation = getCategoryPresentation(transaction.category);
 
   return (
-    <article className="grid gap-4 py-5 first:pt-0 last:pb-0 md:grid-cols-[110px_minmax(0,1fr)_160px_130px] md:items-center">
+    <article className="grid gap-4 py-5 first:pt-0 last:pb-0 md:grid-cols-[110px_minmax(0,1fr)_180px_130px] md:items-center">
       <div>
         <p className="text-sm text-zinc-500">
           {formatDate(transaction.postedDate)}
@@ -135,7 +143,7 @@ function TransactionRow({ transaction }: { transaction: EnrichedTransaction }) {
           </p>
 
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getTransactionBadgeClasses(
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${getTransactionBadgeClasses(
               transaction,
             )}`}
           >
@@ -143,28 +151,28 @@ function TransactionRow({ transaction }: { transaction: EnrichedTransaction }) {
           </span>
 
           {transaction.userDefined && (
-            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-              Taught
-            </span>
+            <StatusBadge tone="info">Taught</StatusBadge>
           )}
 
           {transaction.ignored && (
-            <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] font-medium text-zinc-600">
-              Ignored
-            </span>
+            <StatusBadge tone="muted">Ignored</StatusBadge>
           )}
         </div>
 
         <p className="mt-1 truncate text-xs text-zinc-500">
           {transaction.rawDescription}
         </p>
+
+        <div className="mt-3 inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-medium text-zinc-600">
+          {categoryPresentation.label}
+        </div>
       </div>
 
       <div className="text-sm">
         <p className="text-zinc-500">Account</p>
 
         <p className="mt-1 font-medium text-zinc-950">
-          {transaction.accountId}
+          {getFriendlyAccountName(transaction.accountId)}
         </p>
       </div>
 
@@ -185,9 +193,7 @@ function TransactionRow({ transaction }: { transaction: EnrichedTransaction }) {
 }
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<EnrichedTransaction[]>([]);
-
-  const [hasImportedData, setHasImportedData] = useState(false);
+  const [snapshot, setSnapshot] = useState<PlanningSnapshot | null>(null);
 
   const [search, setSearch] = useState("");
 
@@ -198,24 +204,30 @@ export default function TransactionsPage() {
   >("all");
 
   useEffect(() => {
-    const snapshot = buildStoredPlanningSnapshot();
+    const timeoutId = window.setTimeout(() => {
+      setSnapshot(buildStoredPlanningSnapshot());
+    }, 0);
 
-    setTransactions(
-      snapshot.transactions.slice().sort((first, second) => {
-        const dateComparison = second.postedDate.localeCompare(
-          first.postedDate,
-        );
-
-        if (dateComparison !== 0) {
-          return dateComparison;
-        }
-
-        return second.id.localeCompare(first.id);
-      }),
-    );
-
-    setHasImportedData(snapshot.dataFreshness.source === "aib-import");
+    return () => window.clearTimeout(timeoutId);
   }, []);
+
+  const transactions = useMemo(() => {
+    if (!snapshot) {
+      return [];
+    }
+
+    return snapshot.transactions.slice().sort((first, second) => {
+      const dateComparison = second.postedDate.localeCompare(first.postedDate);
+
+      if (dateComparison !== 0) {
+        return dateComparison;
+      }
+
+      return second.id.localeCompare(first.id);
+    });
+  }, [snapshot]);
+
+  const hasImportedData = snapshot?.dataFreshness.source === "aib-import";
 
   const filteredTransactions = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
@@ -278,40 +290,41 @@ export default function TransactionsPage() {
 
   if (!hasImportedData) {
     return (
-      <section className="rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
-        <h1 className="text-2xl font-semibold text-zinc-950">
-          No imported transactions yet
-        </h1>
+      <PageShell>
+        <PageHeader
+          eyebrow="Activity"
+          title="Transactions"
+          description="Search, review and understand the enriched transactions used by the planning engine."
+        />
 
-        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
-          Import an AIB transaction export to populate the live transaction
-          history.
-        </p>
+        <section className="rounded-[2rem] border border-zinc-200 bg-white p-8 text-center shadow-[0_1px_0_0_rgba(15,23,42,0.04)]">
+          <h2 className="text-2xl font-semibold text-zinc-950">
+            No imported transactions yet
+          </h2>
 
-        <Link
-          href="/settings/import"
-          className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800"
-        >
-          Import transactions
-        </Link>
-      </section>
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
+            Import an AIB transaction export to populate the live transaction
+            history.
+          </p>
+
+          <Link
+            href="/settings/import"
+            className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800"
+          >
+            Import transactions
+          </Link>
+        </section>
+      </PageShell>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-sm text-zinc-500">Activity</p>
-
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-zinc-950">
-          Transactions
-        </h1>
-
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-          Search, review and understand the enriched transactions used by the
-          planning engine.
-        </p>
-      </header>
+    <PageShell>
+      <PageHeader
+        eyebrow="Activity"
+        title="Transactions"
+        description="Search, review and understand the enriched transactions used by the planning engine."
+      />
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
@@ -347,7 +360,7 @@ export default function TransactionsPage() {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <section className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_1px_0_0_rgba(15,23,42,0.04)]">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -441,6 +454,6 @@ export default function TransactionsPage() {
           )}
         </div>
       </section>
-    </div>
+    </PageShell>
   );
 }

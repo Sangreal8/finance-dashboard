@@ -35,7 +35,7 @@ export function ReservedMoneyCard({ reserves }: ReservedMoneyCardProps) {
     .reduce((total, reserve) => total + reserve.amount, 0);
 
   return (
-    <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <section className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_1px_0_0_rgba(15,23,42,0.04)] sm:p-7">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-zinc-500">Money reserved</p>

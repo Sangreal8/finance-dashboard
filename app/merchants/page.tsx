@@ -8,6 +8,10 @@ import {
   saveMerchantDefinition,
 } from "@/lib/merchants";
 import { loadAibImportSnapshot } from "@/lib/import";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { PageShell } from "@/components/ui/PageShell";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { getCategoryPresentation } from "@/lib/ui/category-metadata";
 import type {
   MerchantCategory,
   MerchantDefinition,
@@ -253,7 +257,15 @@ export default function MerchantsPage() {
   }
 
   useEffect(() => {
-    rebuildLibrary();
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      rebuildLibrary();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const selectedMerchant =
@@ -301,110 +313,105 @@ export default function MerchantsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-8 text-zinc-950 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header>
-          <p className="text-sm text-zinc-500">Intelligence</p>
+    <PageShell>
+      <PageHeader
+        eyebrow="Intelligence"
+        title="Merchant library"
+        description="Teach the app how merchants should be categorised and used throughout your financial model."
+      />
 
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-            Merchant library
-          </h1>
+      {!library && (
+        <section className="rounded-[2rem] border border-zinc-200 bg-white p-8 text-center shadow-[0_1px_0_0_rgba(15,23,42,0.04)]">
+          <h2 className="text-xl font-semibold">
+            No imported transactions yet
+          </h2>
 
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            Teach the app how merchants should be categorised and used
-            throughout your financial model.
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
+            Import an AIB transaction file first. The merchant library will then
+            be generated automatically.
           </p>
-        </header>
 
-        {!library && (
-          <section className="rounded-3xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
-            <h2 className="text-xl font-semibold">
-              No imported transactions yet
-            </h2>
+          <a
+            href="/settings/import"
+            className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800"
+          >
+            Import transactions
+          </a>
+        </section>
+      )}
 
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
-              Import an AIB transaction file first. The merchant library will
-              then be generated automatically.
-            </p>
+      {library && (
+        <>
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-zinc-500">Merchants found</p>
+              <p className="mt-1 text-3xl font-semibold">
+                {library.totalMerchants}
+              </p>
+            </div>
 
-            <a
-              href="/settings/import"
-              className="mt-6 inline-flex rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800"
-            >
-              Import transactions
-            </a>
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-zinc-500">Recognised</p>
+              <p className="mt-1 text-3xl font-semibold">
+                {library.recognisedMerchants}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-zinc-500">Needs teaching</p>
+              <p className="mt-1 text-3xl font-semibold">
+                {library.uncategorisedMerchants}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <p className="text-sm text-zinc-500">Forecast contributors</p>
+              <p className="mt-1 text-3xl font-semibold">
+                {library.forecastMerchants}
+              </p>
+            </div>
           </section>
-        )}
 
-        {library && (
-          <>
-            <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-zinc-500">Merchants found</p>
-                <p className="mt-1 text-3xl font-semibold">
-                  {library.totalMerchants}
+          <section className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_1px_0_0_rgba(15,23,42,0.04)]">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-zinc-500">
+                  Known financial behaviour
                 </p>
+
+                <h2 className="mt-1 text-xl font-semibold">Merchants</h2>
               </div>
 
-              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-zinc-500">Recognised</p>
-                <p className="mt-1 text-3xl font-semibold">
-                  {library.recognisedMerchants}
-                </p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search merchants"
+                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowUncategorisedOnly((current) => !current)
+                  }
+                  className={
+                    showUncategorisedOnly
+                      ? "rounded-xl bg-zinc-950 px-3 py-2 text-sm font-medium text-white"
+                      : "rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  }
+                >
+                  Needs teaching
+                </button>
               </div>
+            </div>
 
-              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-zinc-500">Needs teaching</p>
-                <p className="mt-1 text-3xl font-semibold">
-                  {library.uncategorisedMerchants}
-                </p>
-              </div>
+            <div className="mt-6 divide-y divide-zinc-100">
+              {filteredMerchants.map((merchant) => {
+                const presentation = getCategoryPresentation(merchant.category);
 
-              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-                <p className="text-sm text-zinc-500">Forecast contributors</p>
-                <p className="mt-1 text-3xl font-semibold">
-                  {library.forecastMerchants}
-                </p>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-zinc-500">
-                    Known financial behaviour
-                  </p>
-
-                  <h2 className="mt-1 text-xl font-semibold">Merchants</h2>
-                </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    type="search"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search merchants"
-                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowUncategorisedOnly((current) => !current)
-                    }
-                    className={
-                      showUncategorisedOnly
-                        ? "rounded-xl bg-zinc-950 px-3 py-2 text-sm font-medium text-white"
-                        : "rounded-xl border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                    }
-                  >
-                    Needs teaching
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-6 divide-y divide-zinc-100">
-                {filteredMerchants.map((merchant) => (
+                return (
                   <button
                     key={merchant.id}
                     type="button"
@@ -417,20 +424,16 @@ export default function MerchantsPage() {
                           {merchant.name}
                         </p>
 
-                        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600">
-                          {merchant.category}
+                        <span className={presentation.badgeClassName}>
+                          {presentation.label}
                         </span>
 
                         {merchant.userDefined && (
-                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
-                            Taught
-                          </span>
+                          <StatusBadge tone="info">Taught</StatusBadge>
                         )}
 
                         {merchant.ignored && (
-                          <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[11px] text-zinc-600">
-                            Ignored
-                          </span>
+                          <StatusBadge tone="muted">Ignored</StatusBadge>
                         )}
                       </div>
 
@@ -468,13 +471,12 @@ export default function MerchantsPage() {
                       Edit
                     </p>
                   </button>
-                ))}
-              </div>
-            </section>
-          </>
-        )}
-      </div>
-
+                );
+              })}
+            </div>
+          </section>
+        </>
+      )}
       {selectedMerchant && (
         <MerchantEditor
           merchant={selectedMerchant}
@@ -483,6 +485,6 @@ export default function MerchantsPage() {
           onClose={() => setSelectedMerchantId(null)}
         />
       )}
-    </main>
+    </PageShell>
   );
 }

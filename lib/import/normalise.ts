@@ -11,9 +11,7 @@ interface MerchantIdentification {
   recognised: boolean;
 }
 
-export function normaliseDescription(
-  description: string
-): string {
+export function normaliseDescription(description: string): string {
   return description
     .normalize("NFKC")
     .replace(/\s+/g, " ")
@@ -22,30 +20,20 @@ export function normaliseDescription(
     .trim();
 }
 
-function removeAibPrefixes(
-  description: string
-): string {
-  return description
-    .replace(
-      /^(VDA|VDC|VDP|D\/D)-?/i,
-      ""
-    )
-    .trim();
+function removeAibPrefixes(description: string): string {
+  return description.replace(/^(VDA|VDC|VDP|D\/D)-?/i, "").trim();
 }
 
 function inferUnrecognisedKind(
-  transaction: ImportedTransaction
+  transaction: ImportedTransaction,
 ): TransactionKind {
   if (transaction.amount > 0) {
     const transactionType =
-      transaction.metadata?.transactionType
-        ?.toLowerCase();
+      transaction.metadata?.transactionType?.toLowerCase();
 
     if (
       transactionType?.includes("refund") ||
-      transaction.rawDescription
-        .toLowerCase()
-        .includes("refund")
+      transaction.rawDescription.toLowerCase().includes("refund")
     ) {
       return "refund";
     }
@@ -58,13 +46,10 @@ function inferUnrecognisedKind(
 
 export function identifyMerchant(
   description: string,
-  transaction?: ImportedTransaction
+  transaction?: ImportedTransaction,
 ): MerchantIdentification {
-  const rule = merchantAliases.find(
-    ({ patterns }) =>
-      patterns.some((pattern) =>
-        pattern.test(description)
-      )
+  const rule = merchantAliases.find(({ patterns }) =>
+    patterns.some((pattern) => pattern.test(description)),
   );
 
   if (rule) {
@@ -75,33 +60,25 @@ export function identifyMerchant(
     };
   }
 
-  const cleanedDescription =
-    removeAibPrefixes(
-      normaliseDescription(description)
-    );
+  const cleanedDescription = removeAibPrefixes(
+    normaliseDescription(description),
+  );
 
   return {
-    merchantName:
-      cleanedDescription || "Unknown transaction",
-    kind: transaction
-      ? inferUnrecognisedKind(transaction)
-      : "unknown",
+    merchantName: cleanedDescription || "Unknown transaction",
+    kind: transaction ? inferUnrecognisedKind(transaction) : "unknown",
     recognised: false,
   };
 }
 
 export function normaliseTransaction(
-  transaction: ImportedTransaction
+  transaction: ImportedTransaction,
 ): NormalisedTransaction {
-  const normalisedDescription =
-    normaliseDescription(
-      transaction.rawDescription
-    );
-
-  const identification = identifyMerchant(
-    normalisedDescription,
-    transaction
+  const normalisedDescription = normaliseDescription(
+    transaction.rawDescription,
   );
+
+  const identification = identifyMerchant(normalisedDescription, transaction);
 
   return {
     id: `${transaction.source}-${transaction.externalId}`,
@@ -111,22 +88,39 @@ export function normaliseTransaction(
     postedDate: transaction.postedDate,
     rawDescription: transaction.rawDescription,
     normalisedDescription,
-    merchantName:
-      identification.merchantName,
+    merchantName: identification.merchantName,
     amount: transaction.amount,
     currency: transaction.currency,
     balanceAfter: transaction.balanceAfter,
     kind: identification.kind,
-    recognised:
-      identification.recognised,
+    recognised: identification.recognised,
     metadata: transaction.metadata,
   };
 }
 
-export function normaliseTransactions(
-  transactions: ImportedTransaction[]
+export function ensureUniqueTransactionIds(
+  transactions: NormalisedTransaction[],
 ): NormalisedTransaction[] {
-  return transactions.map(
-    normaliseTransaction
-  );
+  const seenIds = new Map<string, number>();
+
+  return transactions.map((transaction) => {
+    const baseId = `${transaction.source}-${transaction.externalId}`;
+    const occurrence = seenIds.get(baseId) ?? 0;
+    seenIds.set(baseId, occurrence + 1);
+
+    if (occurrence === 0) {
+      return transaction;
+    }
+
+    return {
+      ...transaction,
+      id: `${baseId}-${occurrence + 1}`,
+    };
+  });
+}
+
+export function normaliseTransactions(
+  transactions: ImportedTransaction[],
+): NormalisedTransaction[] {
+  return ensureUniqueTransactionIds(transactions.map(normaliseTransaction));
 }

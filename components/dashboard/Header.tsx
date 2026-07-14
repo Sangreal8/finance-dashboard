@@ -9,7 +9,7 @@ export default function Header() {
           Good evening, Josh 👋
         </h1>
         <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-          Here's your financial snapshot.
+          Here&apos;s your financial snapshot.
         </p>
       </div>
 

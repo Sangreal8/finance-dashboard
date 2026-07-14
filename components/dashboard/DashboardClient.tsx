@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { PageShell } from "@/components/ui/PageShell";
 import { FinancialSnapshot } from "./FinancialSnapshot";
 import { ReservedMoneyCard } from "./ReservedMoneyCard";
 import { UpcomingTimeline } from "./UpcomingTimeline";
@@ -41,52 +43,59 @@ export function DashboardClient({
   initialTimeline,
   reserves,
 }: DashboardClientProps) {
-  const [position, setPosition] = useState(initialPosition);
-
-  const [timeline, setTimeline] = useState(initialTimeline);
-
-  const [dataFreshness, setDataFreshness] = useState<PlanningDataFreshness>({
-    source: "manual",
-  });
+  const [snapshot, setSnapshot] = useState<{
+    position: FinancialPosition;
+    timeline: FinanceTimelineEvent[];
+    dataFreshness: PlanningDataFreshness;
+  } | null>(null);
 
   useEffect(() => {
-    const snapshot = buildStoredPlanningSnapshot();
+    const timeoutId = window.setTimeout(() => {
+      const builtSnapshot = buildStoredPlanningSnapshot();
+      setSnapshot({
+        position: builtSnapshot.position,
+        timeline: builtSnapshot.timeline,
+        dataFreshness: builtSnapshot.dataFreshness,
+      });
+    }, 0);
 
-    setPosition(snapshot.position);
-    setTimeline(snapshot.timeline);
-    setDataFreshness(snapshot.dataFreshness);
+    return () => window.clearTimeout(timeoutId);
   }, []);
+
+  function refreshSnapshot() {
+    const builtSnapshot = buildStoredPlanningSnapshot();
+    setSnapshot({
+      position: builtSnapshot.position,
+      timeline: builtSnapshot.timeline,
+      dataFreshness: builtSnapshot.dataFreshness,
+    });
+  }
 
   function resetImportedData() {
     clearAibImportSnapshot();
-
-    const snapshot = buildStoredPlanningSnapshot();
-
-    setPosition(snapshot.position);
-    setTimeline(snapshot.timeline);
-    setDataFreshness(snapshot.dataFreshness);
+    refreshSnapshot();
   }
 
+  const position = snapshot?.position ?? initialPosition;
+  const timeline = snapshot?.timeline ?? initialTimeline;
+  const dataFreshness = snapshot?.dataFreshness ?? {
+    source: "manual" as const,
+  };
   const freshnessLabel = getFreshnessLabel(dataFreshness);
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-6 text-zinc-950 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm text-zinc-500">Finance Dashboard</p>
-
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-              Good evening, Josh
-            </h1>
-          </div>
-
-          {freshnessLabel && (
-            <div className="text-sm text-zinc-500 sm:text-right">
-              <p>{freshnessLabel}</p>
+    <PageShell>
+      <PageHeader
+        eyebrow="Finance dashboard"
+        title="Good evening, Josh"
+        description="A calm view of what is already committed, what is still flexible, and what the month is likely to look like."
+        actions={
+          freshnessLabel ? (
+            <div className="rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm text-zinc-600 shadow-sm">
+              <p className="font-medium text-zinc-950">{freshnessLabel}</p>
 
               {dataFreshness.latestTransactionDate && (
-                <p className="mt-1 text-xs">
+                <p className="mt-1 text-xs text-zinc-500">
                   Latest transaction{" "}
                   {new Intl.DateTimeFormat("en-IE", {
                     day: "numeric",
@@ -100,20 +109,20 @@ export function DashboardClient({
               <button
                 type="button"
                 onClick={resetImportedData}
-                className="mt-1 text-xs font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950"
+                className="mt-2 text-xs font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-4 transition hover:text-zinc-950"
               >
                 Use manual snapshot instead
               </button>
             </div>
-          )}
-        </header>
+          ) : null
+        }
+      />
 
-        <FinancialSnapshot position={position} />
+      <FinancialSnapshot position={position} />
 
-        <ReservedMoneyCard reserves={reserves} />
+      <ReservedMoneyCard reserves={reserves} />
 
-        <UpcomingTimeline events={timeline} />
-      </div>
-    </main>
+      <UpcomingTimeline events={timeline} />
+    </PageShell>
   );
 }

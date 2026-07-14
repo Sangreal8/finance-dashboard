@@ -45,7 +45,7 @@ function formatStatus(status: PlannedCommitmentStatus | "expected") {
 
 export function UpcomingTimeline({ events }: UpcomingTimelineProps) {
   return (
-    <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <section className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_1px_0_0_rgba(15,23,42,0.04)] sm:p-7">
       <div className="mb-6">
         <p className="text-sm text-zinc-500">Coming up</p>
         <h2 className="mt-1 text-2xl font-semibold text-zinc-950">

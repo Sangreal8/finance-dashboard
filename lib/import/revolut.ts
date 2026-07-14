@@ -1,8 +1,8 @@
 import type { ImportResult } from "./types";
 
-export function parseRevolutCsv(
-  _csv: string
-): ImportResult {
+export function parseRevolutCsv(csv: string): ImportResult {
+  void csv;
+
   return {
     source: "revolut",
     accounts: [],
@@ -10,16 +10,15 @@ export function parseRevolutCsv(
     warnings: [
       {
         code: "unsupported-row",
-        message:
-          "Revolut CSV import has not been implemented yet.",
+        message: "Revolut CSV import has not been implemented yet.",
       },
     ],
   };
 }
 
-export function parseRevolutCreditCardCsv(
-  _csv: string
-): ImportResult {
+export function parseRevolutCreditCardCsv(csv: string): ImportResult {
+  void csv;
+
   return {
     source: "revolut-credit-card",
     accounts: [],
@@ -27,8 +26,7 @@ export function parseRevolutCreditCardCsv(
     warnings: [
       {
         code: "unsupported-row",
-        message:
-          "Revolut credit-card CSV import has not been implemented yet.",
+        message: "Revolut credit-card CSV import has not been implemented yet.",
       },
     ],
   };
