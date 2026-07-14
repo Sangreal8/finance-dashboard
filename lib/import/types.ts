@@ -1,12 +1,6 @@
-export type ImportSource =
-  | "aib"
-  | "revolut"
-  | "revolut-credit-card";
+export type ImportSource = "aib" | "revolut" | "revolut-credit-card";
 
-export type ImportAccountType =
-  | "current"
-  | "savings"
-  | "credit_card";
+export type ImportAccountType = "current" | "savings" | "credit_card";
 
 export type TransactionKind =
   | "purchase"
@@ -55,6 +49,12 @@ export interface ImportedTransaction {
 
   currency: string;
   balanceAfter?: number;
+
+  /**
+   * A semantic transaction kind supplied by an importer when the bank export
+   * provides enough information to classify the transaction confidently.
+   */
+  suggestedKind?: TransactionKind;
 
   /**
    * Bank-specific context that can help later matching and reconciliation.

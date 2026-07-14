@@ -27,6 +27,10 @@ function removeAibPrefixes(description: string): string {
 function inferUnrecognisedKind(
   transaction: ImportedTransaction,
 ): TransactionKind {
+  if (transaction.suggestedKind) {
+    return transaction.suggestedKind;
+  }
+
   if (transaction.amount > 0) {
     const transactionType =
       transaction.metadata?.transactionType?.toLowerCase();
@@ -55,7 +59,7 @@ export function identifyMerchant(
   if (rule) {
     return {
       merchantName: rule.merchantName,
-      kind: rule.kind,
+      kind: transaction?.suggestedKind ?? rule.kind,
       recognised: true,
     };
   }
@@ -67,7 +71,9 @@ export function identifyMerchant(
   return {
     merchantName: cleanedDescription || "Unknown transaction",
     kind: transaction ? inferUnrecognisedKind(transaction) : "unknown",
-    recognised: false,
+    recognised:
+      transaction?.suggestedKind !== undefined &&
+      transaction.suggestedKind !== "unknown",
   };
 }
 
@@ -106,6 +112,7 @@ export function ensureUniqueTransactionIds(
   return transactions.map((transaction) => {
     const baseId = `${transaction.source}-${transaction.externalId}`;
     const occurrence = seenIds.get(baseId) ?? 0;
+
     seenIds.set(baseId, occurrence + 1);
 
     if (occurrence === 0) {

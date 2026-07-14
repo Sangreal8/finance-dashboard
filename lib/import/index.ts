@@ -1,6 +1,10 @@
 export { parseAibCsv } from "./aib";
 
-export { parseRevolutCreditCardCsv, parseRevolutCsv } from "./revolut";
+export {
+  parseRevolutCreditCardCsv,
+  parseRevolutCsv,
+  parseRevolutWorkbook,
+} from "./revolut";
 
 export { readXlsxWorkbook } from "./xlsx";
 
