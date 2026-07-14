@@ -5,6 +5,7 @@ import { monthlyPlan } from "@/data/monthlyPlan";
 import {
   normaliseTransactions,
   parseAibCsv,
+  readXlsxWorkbook,
   saveAibImportSnapshot,
 } from "@/lib/import";
 import {
@@ -15,8 +16,27 @@ import type {
   ImportResult,
   NormalisedTransaction,
   TransactionKind,
+  XlsxWorkbook,
 } from "@/lib/import";
 import type { ReconciliationSummary } from "@/lib/reconciliation";
+
+interface RevolutWorkbookState {
+  fileName: string;
+  workbook: XlsxWorkbook;
+}
+
+const REVOLUT_REQUIRED_HEADERS = [
+  "Type",
+  "Product",
+  "Started Date",
+  "Completed Date",
+  "Description",
+  "Amount",
+  "Fee",
+  "Currency",
+  "State",
+  "Balance",
+];
 
 interface ImportedFileState {
   fileName: string;
@@ -38,6 +58,24 @@ function formatDate(date: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${date}T12:00:00`));
+}
+
+function formatPreviewValue(value: unknown) {
+  if (value instanceof Date) {
+    return new Intl.DateTimeFormat("en-IE", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(value);
+  }
+
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+
+  return String(value);
 }
 
 function getKindLabel(kind: TransactionKind) {
@@ -62,6 +100,13 @@ export default function ImportTransactionsPage() {
 
   const [isReading, setIsReading] = useState(false);
 
+  const [revolutWorkbook, setRevolutWorkbook] =
+    useState<RevolutWorkbookState | null>(null);
+
+  const [revolutError, setRevolutError] = useState<string | null>(null);
+
+  const [isReadingRevolut, setIsReadingRevolut] = useState(false);
+
   async function handleFile(file: File | undefined) {
     if (!file) {
       return;
@@ -72,6 +117,7 @@ export default function ImportTransactionsPage() {
 
     if (!file.name.toLowerCase().endsWith(".csv")) {
       setError("Please choose an AIB transaction export in CSV format.");
+
       return;
     }
 
@@ -85,6 +131,7 @@ export default function ImportTransactionsPage() {
         setError(
           "No transactions were found. Check that this is an AIB transaction export.",
         );
+
         return;
       }
 
@@ -119,6 +166,70 @@ export default function ImportTransactionsPage() {
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     void handleFile(event.target.files?.[0]);
+
+    event.target.value = "";
+  }
+
+  async function handleRevolutFile(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    setRevolutError(null);
+    setRevolutWorkbook(null);
+
+    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+      setRevolutError(
+        "Please choose a Revolut account statement in XLSX format.",
+      );
+
+      return;
+    }
+
+    setIsReadingRevolut(true);
+
+    try {
+      const workbook = await readXlsxWorkbook(file);
+
+      const missingHeaders = REVOLUT_REQUIRED_HEADERS.filter(
+        (header) => !workbook.headers.includes(header),
+      );
+
+      if (missingHeaders.length > 0) {
+        setRevolutError(
+          `This does not look like a Revolut account statement. Missing columns: ${missingHeaders.join(
+            ", ",
+          )}.`,
+        );
+
+        return;
+      }
+
+      if (workbook.rows.length === 0) {
+        setRevolutError(
+          "The workbook was read, but it does not contain any transactions.",
+        );
+
+        return;
+      }
+
+      setRevolutWorkbook({
+        fileName: file.name,
+        workbook,
+      });
+    } catch (workbookError) {
+      setRevolutError(
+        workbookError instanceof Error
+          ? workbookError.message
+          : "The Revolut workbook could not be read.",
+      );
+    } finally {
+      setIsReadingRevolut(false);
+    }
+  }
+
+  function handleRevolutFileChange(event: ChangeEvent<HTMLInputElement>) {
+    void handleRevolutFile(event.target.files?.[0]);
 
     event.target.value = "";
   }
@@ -168,6 +279,7 @@ export default function ImportTransactionsPage() {
       if (existing) {
         existing.count += 1;
         existing.total += transaction.amount;
+
         return;
       }
 
@@ -216,8 +328,9 @@ export default function ImportTransactionsPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            Import an AIB transaction export to see what the finance engine
-            recognises and which commitments have already been paid.
+            Import AIB transactions into the finance engine, or test that an
+            official Revolut XLSX statement can be read before we wire in the
+            full Revolut importer.
           </p>
         </header>
 
@@ -260,6 +373,95 @@ export default function ImportTransactionsPage() {
               </p>
 
               <p className="mt-1 text-sm text-red-700">{error}</p>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 text-center">
+            <div className="mx-auto max-w-md">
+              <p className="text-lg font-semibold text-zinc-950">
+                Test Revolut XLSX
+              </p>
+
+              <p className="mt-2 text-sm leading-6 text-zinc-500">
+                This first step only reads and validates the workbook locally.
+                It does not import, save, or display Revolut transactions
+                elsewhere in the app yet.
+              </p>
+
+              <label className="mt-6 inline-flex cursor-pointer items-center justify-center rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800">
+                {isReadingRevolut ? "Reading workbook…" : "Choose XLSX file"}
+
+                <input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  disabled={isReadingRevolut}
+                  onChange={handleRevolutFileChange}
+                  className="sr-only"
+                />
+              </label>
+
+              {revolutWorkbook && (
+                <p className="mt-3 text-xs text-zinc-500">
+                  {revolutWorkbook.fileName}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {revolutError && (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+              <p className="text-sm font-medium text-red-900">
+                Workbook test unsuccessful
+              </p>
+
+              <p className="mt-1 text-sm text-red-700">{revolutError}</p>
+            </div>
+          )}
+
+          {revolutWorkbook && (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm font-medium text-emerald-950">
+                Revolut workbook read successfully
+              </p>
+
+              <p className="mt-1 text-sm text-emerald-800">
+                {revolutWorkbook.workbook.rows.length} data rows and{" "}
+                {revolutWorkbook.workbook.headers.length} columns found.
+              </p>
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-emerald-200 bg-white">
+                <table className="min-w-full divide-y divide-zinc-200 text-left text-xs">
+                  <thead className="bg-zinc-50">
+                    <tr>
+                      {revolutWorkbook.workbook.headers.map((header) => (
+                        <th
+                          key={header}
+                          className="whitespace-nowrap px-3 py-2 font-medium text-zinc-600"
+                        >
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <tr>
+                      {revolutWorkbook.workbook.headers.map((header) => (
+                        <td
+                          key={header}
+                          className="whitespace-nowrap px-3 py-2 text-zinc-700"
+                        >
+                          {formatPreviewValue(
+                            revolutWorkbook.workbook.rows[0]?.[header],
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </section>

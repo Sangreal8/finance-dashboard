@@ -1,9 +1,8 @@
 export { parseAibCsv } from "./aib";
 
-export {
-  parseRevolutCreditCardCsv,
-  parseRevolutCsv,
-} from "./revolut";
+export { parseRevolutCreditCardCsv, parseRevolutCsv } from "./revolut";
+
+export { readXlsxWorkbook } from "./xlsx";
 
 export {
   identifyMerchant,
@@ -18,9 +17,7 @@ export {
   saveAibImportSnapshot,
 } from "./storage";
 
-export type {
-  StoredAibImportSnapshot,
-} from "./storage";
+export type { StoredAibImportSnapshot } from "./storage";
 
 export type {
   CsvRow,
@@ -33,3 +30,5 @@ export type {
   NormalisedTransaction,
   TransactionKind,
 } from "./types";
+
+export type { XlsxCellValue, XlsxWorkbook } from "./xlsx";
