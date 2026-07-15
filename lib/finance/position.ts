@@ -220,6 +220,7 @@ export function buildFinancialPosition(
   const financialStatus = getFinancialStatus({
     safeToSpend: rawSafeToSpend,
     projectedMonthEnd,
+    knownCommitments,
   });
 
   const breakdown: FinancialBreakdownRow[] = [
