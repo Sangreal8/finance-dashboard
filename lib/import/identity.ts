@@ -2,9 +2,8 @@
  * Generates a compact deterministic identifier from
  * provider-specific transaction identity fields.
  *
- * The caller remains responsible for deciding which fields
- * form the identity. This utility only centralises the hash
- * implementation so every importer uses the same algorithm.
+ * Callers decide which fields define an identity. This
+ * utility only centralises the hashing implementation.
  */
 export function generateTransactionIdentity(
   parts: Array<string | number | undefined | null>,
@@ -26,4 +25,38 @@ export function generateTransactionIdentity(
   }
 
   return Math.abs(hash).toString(36);
+}
+
+export function canonicaliseAibAccount(accountId: string): string {
+  return accountId.replace(/\s+/g, "").trim().toUpperCase();
+}
+
+export function canonicaliseAibDescription(description: string): string {
+  return description
+    .normalize("NFKC")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+export function generateAibTransactionIdentity({
+  accountId,
+  postedDate,
+  amount,
+  description,
+  occurrence,
+}: {
+  accountId: string;
+  postedDate: string;
+  amount: number;
+  description: string;
+  occurrence: number;
+}): string {
+  return generateTransactionIdentity([
+    canonicaliseAibAccount(accountId),
+    postedDate,
+    amount.toFixed(2),
+    canonicaliseAibDescription(description),
+    occurrence,
+  ]);
 }
