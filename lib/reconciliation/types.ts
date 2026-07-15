@@ -2,9 +2,7 @@ import type {
   PlannedCommitment,
   PlannedCommitmentStatus,
 } from "@/lib/finance/types";
-import type {
-  NormalisedTransaction,
-} from "@/lib/import";
+import type { NormalisedTransaction } from "@/lib/import";
 
 export type ReconciliationStatus =
   | "paid"
@@ -12,10 +10,13 @@ export type ReconciliationStatus =
   | "overdue"
   | "cancelled";
 
-export type MatchConfidence =
-  | "high"
-  | "medium"
-  | "none";
+export type MatchConfidence = "high" | "medium" | "none";
+
+export type ReconciliationReason =
+  | "matched-transaction"
+  | "no-matching-transaction"
+  | "already-paid"
+  | "cancelled";
 
 export interface ReconciliationMatch {
   commitment: PlannedCommitment;
@@ -23,6 +24,9 @@ export interface ReconciliationMatch {
 
   status: ReconciliationStatus;
   confidence: MatchConfidence;
+  reason: ReconciliationReason;
+
+  explanation: string;
 
   amountDifference?: number;
   dateDifferenceDays?: number;
@@ -51,12 +55,9 @@ export interface ReconciliationOptions {
 }
 
 export function mapReconciliationStatusToCommitmentStatus(
-  status: ReconciliationStatus
+  status: ReconciliationStatus,
 ): PlannedCommitmentStatus {
-  const statusMap: Record<
-    ReconciliationStatus,
-    PlannedCommitmentStatus
-  > = {
+  const statusMap: Record<ReconciliationStatus, PlannedCommitmentStatus> = {
     paid: "paid",
     upcoming: "planned",
     overdue: "missed",

@@ -783,42 +783,144 @@ export default function ImportTransactionsPage() {
                 {importedFile.reconciliation.matches.map((match) => (
                   <div
                     key={match.commitment.id}
-                    className="flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0"
+                    className="py-5 first:pt-0 last:pb-0"
                   >
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-zinc-950">
-                          {match.commitment.name}
-                        </p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium text-zinc-950">
+                            {match.commitment.name}
+                          </p>
 
-                        <span
-                          className={
-                            match.status === "paid"
-                              ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800"
+                          <span
+                            className={
+                              match.status === "paid"
+                                ? "rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800"
+                                : match.status === "overdue"
+                                  ? "rounded-full bg-red-100 px-2 py-0.5 text-[11px] text-red-800"
+                                  : match.status === "cancelled"
+                                    ? "rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500"
+                                    : "rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600"
+                            }
+                          >
+                            {match.status === "paid"
+                              ? "Paid"
                               : match.status === "overdue"
-                                ? "rounded-full bg-red-100 px-2 py-0.5 text-[11px] text-red-800"
-                                : "rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600"
-                          }
-                        >
-                          {match.status === "paid"
-                            ? "Paid"
-                            : match.status === "overdue"
-                              ? "Overdue"
-                              : "Upcoming"}
-                        </span>
+                                ? "Overdue"
+                                : match.status === "cancelled"
+                                  ? "Cancelled"
+                                  : "Upcoming"}
+                          </span>
+
+                          {match.confidence !== "none" && (
+                            <span className="rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] text-zinc-500">
+                              {match.confidence === "high"
+                                ? "High-confidence match"
+                                : "Review match"}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Due {formatDate(match.commitment.dueDate)}
+                        </p>
                       </div>
 
-                      <p className="mt-1 text-xs text-zinc-500">
-                        Due {formatDate(match.commitment.dueDate)}
-                        {match.transaction
-                          ? ` · Matched to ${match.transaction.merchantName}`
-                          : ""}
+                      <p className="shrink-0 text-sm font-medium text-zinc-950">
+                        {formatCurrency(match.commitment.amount)}
                       </p>
                     </div>
 
-                    <p className="text-sm font-medium text-zinc-950">
-                      {formatCurrency(match.commitment.amount)}
-                    </p>
+                    <div
+                      className={
+                        match.transaction
+                          ? "mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
+                          : match.status === "overdue"
+                            ? "mt-4 rounded-2xl border border-red-200 bg-red-50 p-4"
+                            : "mt-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
+                      }
+                    >
+                      <p
+                        className={
+                          match.transaction
+                            ? "text-xs font-medium text-emerald-950"
+                            : match.status === "overdue"
+                              ? "text-xs font-medium text-red-950"
+                              : "text-xs font-medium text-zinc-700"
+                        }
+                      >
+                        {match.explanation}
+                      </p>
+
+                      {match.transaction && (
+                        <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+                          <div>
+                            <p className="text-zinc-500">Matched transaction</p>
+
+                            <p className="mt-1 font-medium text-zinc-950">
+                              {match.transaction.rawDescription}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-zinc-500">Transaction details</p>
+
+                            <p className="mt-1 font-medium text-zinc-950">
+                              {formatDate(match.transaction.postedDate)}
+                              {" · "}
+                              {formatCurrency(
+                                Math.abs(match.transaction.amount),
+                              )}
+                              {" · "}
+                              {match.transaction.source === "aib"
+                                ? "AIB"
+                                : "Revolut"}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-zinc-500">
+                              Expected merchant patterns
+                            </p>
+
+                            <p className="mt-1 font-medium text-zinc-950">
+                              {match.commitment.merchantPatterns?.join(" · ") ??
+                                match.commitment.name}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-zinc-500">Match distance</p>
+
+                            <p className="mt-1 font-medium text-zinc-950">
+                              {match.dateDifferenceDays === 0
+                                ? "Paid on expected date"
+                                : `${match.dateDifferenceDays ?? 0} ${
+                                    match.dateDifferenceDays === 1
+                                      ? "day"
+                                      : "days"
+                                  } from due date`}
+                              {" · "}
+                              {formatCurrency(match.amountDifference ?? 0)}{" "}
+                              amount difference
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {!match.transaction && (
+                        <div className="mt-3">
+                          <p className="text-xs text-zinc-500">
+                            Expected patterns
+                          </p>
+
+                          <p className="mt-1 text-xs font-medium text-zinc-800">
+                            {match.commitment.merchantPatterns?.join(" · ") ??
+                              match.commitment.name}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

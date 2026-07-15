@@ -1,9 +1,5 @@
-import type {
-  PlannedCommitment,
-} from "@/lib/finance/types";
-import type {
-  NormalisedTransaction,
-} from "@/lib/import";
+import type { PlannedCommitment } from "@/lib/finance/types";
+import type { NormalisedTransaction } from "@/lib/import";
 import type {
   MatchConfidence,
   ReconciliationMatch,
@@ -28,34 +24,20 @@ function parseDate(date: string): Date {
   return new Date(`${date}T12:00:00`);
 }
 
-function differenceInDays(
-  firstDate: string,
-  secondDate: string
-): number {
+function differenceInDays(firstDate: string, secondDate: string): number {
   const first = parseDate(firstDate);
   const second = parseDate(secondDate);
 
   return Math.abs(
-    Math.round(
-      (first.getTime() - second.getTime()) /
-        (1000 * 60 * 60 * 24)
-    )
+    Math.round((first.getTime() - second.getTime()) / (1000 * 60 * 60 * 24)),
   );
 }
 
-function isBefore(
-  firstDate: string,
-  secondDate: string
-): boolean {
-  return (
-    parseDate(firstDate).getTime() <
-    parseDate(secondDate).getTime()
-  );
+function isBefore(firstDate: string, secondDate: string): boolean {
+  return parseDate(firstDate).getTime() < parseDate(secondDate).getTime();
 }
 
-function normaliseForMatching(
-  value: string
-): string {
+function normaliseForMatching(value: string): string {
   return value
     .normalize("NFKC")
     .toLowerCase()
@@ -66,12 +48,11 @@ function normaliseForMatching(
 
 function merchantMatches(
   commitment: PlannedCommitment,
-  transaction: NormalisedTransaction
+  transaction: NormalisedTransaction,
 ): boolean {
-  const patterns =
-    commitment.merchantPatterns?.length
-      ? commitment.merchantPatterns
-      : [commitment.name];
+  const patterns = commitment.merchantPatterns?.length
+    ? commitment.merchantPatterns
+    : [commitment.name];
 
   const descriptions = [
     transaction.merchantName,
@@ -80,23 +61,19 @@ function merchantMatches(
   ].map(normaliseForMatching);
 
   return patterns.some((pattern) => {
-    const normalisedPattern =
-      normaliseForMatching(pattern);
+    const normalisedPattern = normaliseForMatching(pattern);
 
     return descriptions.some((description) =>
-      description.includes(normalisedPattern)
+      description.includes(normalisedPattern),
     );
   });
 }
 
 function getAmountDifference(
   commitment: PlannedCommitment,
-  transaction: NormalisedTransaction
+  transaction: NormalisedTransaction,
 ): number {
-  return Math.abs(
-    Math.abs(transaction.amount) -
-      commitment.amount
-  );
+  return Math.abs(Math.abs(transaction.amount) - commitment.amount);
 }
 
 function amountMatches(
@@ -105,34 +82,25 @@ function amountMatches(
   options: Required<
     Pick<
       ReconciliationOptions,
-      | "fixedAmountTolerance"
-      | "estimatedAmountTolerancePercent"
+      "fixedAmountTolerance" | "estimatedAmountTolerancePercent"
     >
-  >
+  >,
 ): boolean {
-  const difference = getAmountDifference(
-    commitment,
-    transaction
-  );
+  const difference = getAmountDifference(commitment, transaction);
 
   if (commitment.confidence === "confirmed") {
-    return (
-      difference <= options.fixedAmountTolerance
-    );
+    return difference <= options.fixedAmountTolerance;
   }
 
   const allowedDifference = Math.max(
     options.fixedAmountTolerance,
-    commitment.amount *
-      options.estimatedAmountTolerancePercent
+    commitment.amount * options.estimatedAmountTolerancePercent,
   );
 
   return difference <= allowedDifference;
 }
 
-function isEligibleTransaction(
-  transaction: NormalisedTransaction
-): boolean {
+function isEligibleTransaction(transaction: NormalisedTransaction): boolean {
   if (transaction.amount >= 0) {
     return false;
   }
@@ -155,7 +123,7 @@ function getCandidate(
       | "fixedAmountTolerance"
       | "estimatedAmountTolerancePercent"
     >
-  >
+  >,
 ): MatchCandidate | null {
   if (!isEligibleTransaction(transaction)) {
     return null;
@@ -165,45 +133,28 @@ function getCandidate(
     return null;
   }
 
-  if (
-    !amountMatches(
-      commitment,
-      transaction,
-      options
-    )
-  ) {
+  if (!amountMatches(commitment, transaction, options)) {
     return null;
   }
 
   const dateDifferenceDays = differenceInDays(
     commitment.dueDate,
-    transaction.postedDate
+    transaction.postedDate,
   );
 
-  if (
-    dateDifferenceDays >
-    options.maximumDateWindowDays
-  ) {
+  if (dateDifferenceDays > options.maximumDateWindowDays) {
     return null;
   }
 
-  const amountDifference =
-    getAmountDifference(
-      commitment,
-      transaction
-    );
+  const amountDifference = getAmountDifference(commitment, transaction);
 
   const confidence: MatchCandidate["confidence"] =
-    dateDifferenceDays <=
-      options.highConfidenceDateWindowDays &&
-    amountDifference <=
-      options.fixedAmountTolerance
+    dateDifferenceDays <= options.highConfidenceDateWindowDays &&
+    amountDifference <= options.fixedAmountTolerance
       ? "high"
       : "medium";
 
-  const score =
-    dateDifferenceDays * 100 +
-    amountDifference;
+  const score = dateDifferenceDays * 100 + amountDifference;
 
   return {
     transaction,
@@ -216,35 +167,49 @@ function getCandidate(
 
 function getUnmatchedStatus(
   commitment: PlannedCommitment,
-  referenceDate: string
+  referenceDate: string,
 ): ReconciliationStatus {
   if (commitment.status === "cancelled") {
     return "cancelled";
   }
 
-  if (
-    commitment.status === "paid" ||
-    commitment.status === "matched"
-  ) {
+  if (commitment.status === "paid" || commitment.status === "matched") {
     return "paid";
   }
 
-  if (
-    isBefore(
-      commitment.dueDate,
-      referenceDate
-    )
-  ) {
+  if (isBefore(commitment.dueDate, referenceDate)) {
     return "overdue";
   }
 
   return "upcoming";
 }
 
+function getUnmatchedExplanation(status: ReconciliationStatus): string {
+  if (status === "overdue") {
+    return (
+      "No imported transaction matched the expected " +
+      "merchant, amount and payment window. The due date has passed."
+    );
+  }
+
+  if (status === "upcoming") {
+    return (
+      "No imported transaction currently matches the expected " +
+      "merchant, amount and payment window."
+    );
+  }
+
+  if (status === "cancelled") {
+    return "This commitment is marked as cancelled.";
+  }
+
+  return "This commitment was already marked as paid in the current plan.";
+}
+
 export function reconcileCommitments(
   commitments: PlannedCommitment[],
   transactions: NormalisedTransaction[],
-  options: ReconciliationOptions
+  options: ReconciliationOptions,
 ): ReconciliationMatch[] {
   const resolvedOptions = {
     highConfidenceDateWindowDays:
@@ -252,85 +217,76 @@ export function reconcileCommitments(
       DEFAULT_HIGH_CONFIDENCE_WINDOW_DAYS,
 
     maximumDateWindowDays:
-      options.maximumDateWindowDays ??
-      DEFAULT_MAXIMUM_WINDOW_DAYS,
+      options.maximumDateWindowDays ?? DEFAULT_MAXIMUM_WINDOW_DAYS,
 
     fixedAmountTolerance:
-      options.fixedAmountTolerance ??
-      DEFAULT_FIXED_AMOUNT_TOLERANCE,
+      options.fixedAmountTolerance ?? DEFAULT_FIXED_AMOUNT_TOLERANCE,
 
     estimatedAmountTolerancePercent:
       options.estimatedAmountTolerancePercent ??
       DEFAULT_ESTIMATED_TOLERANCE_PERCENT,
   };
 
-  const usedTransactionIds =
-    new Set<string>();
+  const usedTransactionIds = new Set<string>();
 
   return commitments.map((commitment) => {
-    if (
-      commitment.status === "cancelled"
-    ) {
+    if (commitment.status === "cancelled") {
       return {
         commitment,
         status: "cancelled",
         confidence: "none",
+        reason: "cancelled",
+        explanation: "This commitment is marked as cancelled.",
+      };
+    }
+
+    if (commitment.status === "paid" || commitment.status === "matched") {
+      return {
+        commitment,
+        status: "paid",
+        confidence: "none",
+        reason: "already-paid",
+        explanation:
+          "This commitment was already marked as paid in the current plan.",
       };
     }
 
     const candidates = transactions
-      .filter(
-        (transaction) =>
-          !usedTransactionIds.has(
-            transaction.id
-          )
-      )
+      .filter((transaction) => !usedTransactionIds.has(transaction.id))
       .map((transaction) =>
-        getCandidate(
-          commitment,
-          transaction,
-          resolvedOptions
-        )
+        getCandidate(commitment, transaction, resolvedOptions),
       )
-      .filter(
-        (
-          candidate
-        ): candidate is MatchCandidate =>
-          candidate !== null
-      )
-      .sort(
-        (first, second) =>
-          first.score - second.score
-      );
+      .filter((candidate): candidate is MatchCandidate => candidate !== null)
+      .sort((first, second) => first.score - second.score);
 
     const bestCandidate = candidates[0];
 
     if (!bestCandidate) {
+      const status = getUnmatchedStatus(commitment, options.referenceDate);
+
       return {
         commitment,
-        status: getUnmatchedStatus(
-          commitment,
-          options.referenceDate
-        ),
+        status,
         confidence: "none",
+        reason: "no-matching-transaction",
+        explanation: getUnmatchedExplanation(status),
       };
     }
 
-    usedTransactionIds.add(
-      bestCandidate.transaction.id
-    );
+    usedTransactionIds.add(bestCandidate.transaction.id);
 
     return {
       commitment,
-      transaction:
-        bestCandidate.transaction,
+      transaction: bestCandidate.transaction,
       status: "paid",
-      confidence:
-        bestCandidate.confidence,
-      amountDifference:
-        bestCandidate.amountDifference,
-      dateDifferenceDays:
-        bestCandidate.dateDifferenceDays,
+      confidence: bestCandidate.confidence,
+      reason: "matched-transaction",
+      explanation:
+        bestCandidate.confidence === "high"
+          ? "Matched confidently using merchant, amount and payment date."
+          : "Matched using merchant and amount, but the date or amount differed slightly from the plan.",
+      amountDifference: bestCandidate.amountDifference,
+      dateDifferenceDays: bestCandidate.dateDifferenceDays,
     };
   });
 }
