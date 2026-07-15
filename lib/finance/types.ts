@@ -130,6 +130,43 @@ export interface FinancialStatus {
   description: string;
 }
 
+/**
+ * Factual explanation of how much cash is genuinely
+ * uncommitted right now.
+ *
+ * Forecast spending is deliberately excluded because it
+ * represents expected behaviour rather than confirmed
+ * obligations.
+ */
+export interface SafeToSpendBreakdown {
+  availableCash: number;
+  remainingCommitments: number;
+  reservedMoney: number;
+  safetyBuffer: number;
+  safeToSpend: number;
+}
+
+export type ForecastConfidence = "low" | "medium" | "high";
+
+/**
+ * Predictive view of where the user is likely to finish
+ * the current month.
+ *
+ * This remains distinct from Safe to Spend so the UI can
+ * clearly separate facts from estimates.
+ */
+export interface ForecastSummary {
+  currentCash: number;
+  expectedIncome: number;
+  remainingCommitments: number;
+  expectedRemainingSpend: number;
+  reservedMoney: number;
+  projectedMonthEndBalance: number;
+  confidence: ForecastConfidence;
+  confidenceScore: number;
+  explanation: string[];
+}
+
 export type FinancialBreakdownRowType =
   | "starting"
   | "commitment"
@@ -159,6 +196,9 @@ export interface FinancialPosition {
   safeToSpend: number;
   expectedIncome: number;
   projectedMonthEnd: number;
+
+  safeToSpendBreakdown: SafeToSpendBreakdown;
+  forecastSummary: ForecastSummary;
 
   daysUntilPayday: number;
   dailyBudget: number;

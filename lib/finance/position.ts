@@ -4,9 +4,11 @@ import type {
   Account,
   FinancialBreakdownRow,
   FinancialPosition,
+  ForecastSummary,
   IncomeItem,
   MonthlyPlan,
   Reserve,
+  SafeToSpendBreakdown,
 } from "./types";
 
 const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -96,6 +98,67 @@ function roundCurrency(amount: number) {
   return Math.round(amount * 100) / 100;
 }
 
+function buildSafeToSpendBreakdown({
+  availableCash,
+  remainingCommitments,
+  reservedMoney,
+  safetyBuffer,
+}: {
+  availableCash: number;
+  remainingCommitments: number;
+  reservedMoney: number;
+  safetyBuffer: number;
+}): SafeToSpendBreakdown {
+  const safeToSpend = Math.max(
+    0,
+    availableCash - remainingCommitments - reservedMoney - safetyBuffer,
+  );
+
+  return {
+    availableCash,
+    remainingCommitments,
+    reservedMoney,
+    safetyBuffer,
+    safeToSpend,
+  };
+}
+
+function buildForecastSummary({
+  currentCash,
+  expectedIncome,
+  remainingCommitments,
+  expectedRemainingSpend,
+  reservedMoney,
+}: {
+  currentCash: number;
+  expectedIncome: number;
+  remainingCommitments: number;
+  expectedRemainingSpend: number;
+  reservedMoney: number;
+}): ForecastSummary {
+  const projectedMonthEndBalance =
+    currentCash +
+    expectedIncome -
+    remainingCommitments -
+    expectedRemainingSpend -
+    reservedMoney;
+
+  return {
+    currentCash,
+    expectedIncome,
+    remainingCommitments,
+    expectedRemainingSpend,
+    reservedMoney,
+    projectedMonthEndBalance,
+    confidence: "medium",
+    confidenceScore: 0.5,
+    explanation: [
+      "The forecast uses planned commitments, expected income and estimated remaining spending.",
+      "Forecast confidence will improve as more transaction history is analysed.",
+    ],
+  };
+}
+
 export function buildFinancialPosition(
   accounts: Account[],
   plan: MonthlyPlan,
@@ -125,9 +188,27 @@ export function buildFinancialPosition(
     0,
   );
 
-  const rawSafeToSpend = availableToday - allocatedCash - plan.safetyBuffer;
+  const safeToSpendBreakdown = buildSafeToSpendBreakdown({
+    availableCash: availableToday,
+    remainingCommitments: knownCommitments,
+    reservedMoney: reservedCash,
+    safetyBuffer: plan.safetyBuffer,
+  });
 
-  const safeToSpend = Math.max(0, rawSafeToSpend);
+  const safeToSpend = safeToSpendBreakdown.safeToSpend;
+
+  const rawSafeToSpend =
+    availableToday - knownCommitments - reservedCash - plan.safetyBuffer;
+
+  const forecastSummary = buildForecastSummary({
+    currentCash: availableToday,
+    expectedIncome,
+    remainingCommitments: knownCommitments,
+    expectedRemainingSpend: estimatedRemainingSpend,
+    reservedMoney: reservedCash,
+  });
+
+  const projectedMonthEnd = forecastSummary.projectedMonthEndBalance;
 
   const daysUntilPayday = getDaysUntilPayday(plan, referenceDate);
 
@@ -135,8 +216,6 @@ export function buildFinancialPosition(
     daysUntilPayday > 0
       ? roundCurrency(safeToSpend / daysUntilPayday)
       : safeToSpend;
-
-  const projectedMonthEnd = availableToday + expectedIncome - allocatedCash;
 
   const financialStatus = getFinancialStatus({
     safeToSpend: rawSafeToSpend,
@@ -155,12 +234,6 @@ export function buildFinancialPosition(
       label: "Known commitments",
       amount: -knownCommitments,
       type: "commitment",
-    },
-    {
-      id: "forecast-spending",
-      label: "Forecast spending",
-      amount: -estimatedRemainingSpend,
-      type: "forecast",
     },
     {
       id: "reserved-money",
@@ -191,10 +264,12 @@ export function buildFinancialPosition(
     reservedCash,
     safetyBuffer: plan.safetyBuffer,
     safeToSpend,
-    daysUntilPayday,
-    dailyBudget,
     expectedIncome,
     projectedMonthEnd,
+    safeToSpendBreakdown,
+    forecastSummary,
+    daysUntilPayday,
+    dailyBudget,
     breakdown,
     financialStatus,
   };
