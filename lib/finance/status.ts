@@ -14,7 +14,7 @@ export function getFinancialStatus({
       health: "healthy",
       title: "You're on track",
       description:
-        "Everything due before payday is covered, with some money still genuinely free to spend.",
+        "Your known commitments are covered, with some cash still genuinely free to spend.",
     };
   }
 
@@ -23,23 +23,23 @@ export function getFinancialStatus({
       health: "warning",
       title: "Things are a little tight until payday",
       description:
-        "Your essential costs are covered, but there is limited room for additional spending.",
+        "Your known commitments are accounted for, but there is limited room for additional spending.",
     };
   }
 
   if (projectedMonthEnd >= 0) {
     return {
       health: "warning",
-      title: "Everything is already spoken for",
+      title: "Your available cash is fully allocated",
       description:
-        "You can reach payday, but there is no genuinely free spending money once your commitments and safety buffer are protected.",
+        "Known commitments, reserves and your safety buffer leave no genuinely free spending money.",
     };
   }
 
   return {
     health: "critical",
-    title: "You may need to use part of your buffer",
+    title: "Your current plan may fall short",
     description:
-      "Your current plan is projected to fall short before the next income arrives.",
+      "Based on the information currently represented in the plan, you may need to review upcoming costs or use part of your buffer.",
   };
 }
