@@ -8,10 +8,13 @@ import type {
 
 const DEFAULT_AIB_ACCOUNT_ID = "aib-current";
 
-function getFirstValue(
-  row: CsvRow,
-  possibleHeaders: string[]
-): string {
+function getNormalisedRow(row: CsvRow): CsvRow {
+  return Object.fromEntries(
+    Object.entries(row).map(([header, value]) => [header.trim(), value.trim()]),
+  );
+}
+
+function getFirstValue(row: CsvRow, possibleHeaders: string[]): string {
   for (const header of possibleHeaders) {
     const value = row[header];
 
@@ -23,18 +26,41 @@ function getFirstValue(
   return "";
 }
 
+function getDescription(row: CsvRow): string {
+  const standardDescription = getFirstValue(row, [
+    "Description",
+    "Transaction Details",
+    "Details",
+    "Narrative",
+  ]);
+
+  if (standardDescription) {
+    return standardDescription;
+  }
+
+  /**
+   * AIB's longer historical export separates the
+   * transaction narrative across three columns.
+   */
+  return [
+    getFirstValue(row, ["Description1"]),
+    getFirstValue(row, ["Description2"]),
+    getFirstValue(row, ["Description3"]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function parseMoney(value: string): number | null {
   if (!value.trim()) {
     return 0;
   }
 
-  const isNegative =
-    value.includes("(") ||
-    value.trim().startsWith("-");
+  const isNegative = value.includes("(") || value.trim().startsWith("-");
 
-  const normalised = value
-    .replace(/[€£$,\s]/g, "")
-    .replace(/[()]/g, "");
+  const normalised = value.replace(/[€£$,\s]/g, "").replace(/[()]/g, "");
 
   const amount = Number(normalised);
 
@@ -42,36 +68,25 @@ function parseMoney(value: string): number | null {
     return null;
   }
 
-  return isNegative
-    ? -Math.abs(amount)
-    : amount;
+  return isNegative ? -Math.abs(amount) : amount;
 }
 
 function parseAibDate(value: string): string | null {
   const trimmed = value.trim();
 
   const dayFirstMatch = trimmed.match(
-    /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{2}|\d{4})$/,
   );
 
   if (dayFirstMatch) {
     const [, day, month, rawYear] = dayFirstMatch;
 
-    const year =
-      rawYear.length === 2
-        ? `20${rawYear}`
-        : rawYear;
+    const year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
 
-    return [
-      year,
-      month.padStart(2, "0"),
-      day.padStart(2, "0"),
-    ].join("-");
+    return [year, month.padStart(2, "0"), day.padStart(2, "0")].join("-");
   }
 
-  const isoMatch = trimmed.match(
-    /^(\d{4})-(\d{2})-(\d{2})$/
-  );
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
 
   if (isoMatch) {
     return trimmed;
@@ -85,7 +100,7 @@ function createExternalId(
   date: string,
   description: string,
   amount: number,
-  balanceAfter?: number
+  balanceAfter?: number,
 ): string {
   const value = [
     accountId,
@@ -97,29 +112,22 @@ function createExternalId(
 
   let hash = 0;
 
-  for (
-    let index = 0;
-    index < value.length;
-    index += 1
-  ) {
-    hash =
-      (hash * 31 + value.charCodeAt(index)) |
-      0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
   }
 
   return Math.abs(hash).toString(36);
 }
 
-export function parseAibCsv(
-  csv: string
-): ImportResult {
+export function parseAibCsv(csv: string): ImportResult {
   const rows = parseCsv(csv);
 
   const transactions: ImportedTransaction[] = [];
   const warnings: ImportWarning[] = [];
 
-  rows.forEach((row, index) => {
+  rows.forEach((rawRow, index) => {
     const rowNumber = index + 2;
+    const row = getNormalisedRow(rawRow);
 
     const rawDate = getFirstValue(row, [
       "Posted Transactions Date",
@@ -136,82 +144,57 @@ export function parseAibCsv(
         code: "invalid-date",
         message: `Could not read transaction date "${rawDate}".`,
       });
+
       return;
     }
 
-    const rawDescription = getFirstValue(row, [
-      "Description",
-      "Transaction Details",
-      "Details",
-      "Narrative",
-    ]);
+    const rawDescription = getDescription(row);
 
     if (!rawDescription) {
       warnings.push({
         row: rowNumber,
         code: "missing-field",
-        message:
-          "The transaction does not contain a description.",
+        message: "The transaction does not contain a description.",
       });
+
       return;
     }
 
     const debit = parseMoney(
-      getFirstValue(row, [
-        "Debit Amount",
-        "Debit",
-        "Money Out",
-        "Paid Out",
-      ])
+      getFirstValue(row, ["Debit Amount", "Debit", "Money Out", "Paid Out"]),
     );
 
     const credit = parseMoney(
-      getFirstValue(row, [
-        "Credit Amount",
-        "Credit",
-        "Money In",
-        "Paid In",
-      ])
+      getFirstValue(row, ["Credit Amount", "Credit", "Money In", "Paid In"]),
     );
 
     if (debit === null || credit === null) {
       warnings.push({
         row: rowNumber,
         code: "invalid-amount",
-        message:
-          "The debit or credit amount could not be parsed.",
+        message: "The debit or credit amount could not be parsed.",
       });
+
       return;
     }
 
     /**
-     * AIB exports additional description lines as separate
-     * zero-value rows. They are not independent transactions.
+     * AIB exports can include additional description rows
+     * with no financial value. They are not independent
+     * transactions.
      */
     if (debit === 0 && credit === 0) {
       return;
     }
 
-    const amount =
-      Math.abs(credit) > 0
-        ? Math.abs(credit)
-        : -Math.abs(debit);
+    const amount = Math.abs(credit) > 0 ? Math.abs(credit) : -Math.abs(debit);
 
-    const parsedBalance = parseMoney(
-      getFirstValue(row, [
-        "Balance",
-        "Running Balance",
-      ])
-    );
+    const rawBalance = getFirstValue(row, ["Balance", "Running Balance"]);
+
+    const parsedBalance = parseMoney(rawBalance);
 
     const balanceAfter =
-      parsedBalance === null ||
-      getFirstValue(row, [
-        "Balance",
-        "Running Balance",
-      ]) === ""
-        ? undefined
-        : parsedBalance;
+      parsedBalance === null || rawBalance === "" ? undefined : parsedBalance;
 
     const externalAccountId = getFirstValue(row, [
       "Posted Account",
@@ -219,8 +202,11 @@ export function parseAibCsv(
       "Account Number",
     ]);
 
-    const accountId =
-      externalAccountId || DEFAULT_AIB_ACCOUNT_ID;
+    const accountId = externalAccountId || DEFAULT_AIB_ACCOUNT_ID;
+
+    const currency =
+      getFirstValue(row, ["Posted Currency", "Currency"]).toUpperCase() ||
+      "EUR";
 
     transactions.push({
       source: "aib",
@@ -229,28 +215,25 @@ export function parseAibCsv(
         postedDate,
         rawDescription,
         amount,
-        balanceAfter
+        balanceAfter,
       ),
       accountId,
       postedDate,
       rawDescription,
       amount,
-      currency: "EUR",
+      currency,
       balanceAfter,
       metadata: {
-        transactionType: getFirstValue(row, [
-          "Transaction Type",
-        ]),
+        transactionType: getFirstValue(row, ["Transaction Type"]),
+        description1: getFirstValue(row, ["Description1"]),
+        description2: getFirstValue(row, ["Description2"]),
+        description3: getFirstValue(row, ["Description3"]),
       },
     });
   });
 
   const accountIds = [
-    ...new Set(
-      transactions.map(
-        (transaction) => transaction.accountId
-      )
-    ),
+    ...new Set(transactions.map((transaction) => transaction.accountId)),
   ];
 
   return {

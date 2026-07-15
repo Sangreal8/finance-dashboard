@@ -5,12 +5,35 @@ const AIB_IMPORT_STORAGE_KEY = "finance-dashboard:aib-import:v1";
 
 const REVOLUT_IMPORT_STORAGE_KEY = "finance-dashboard:revolut-import:v1";
 
+export interface ImportMergeSummary {
+  /**
+   * Number of transactions supplied by the latest uploaded file.
+   */
+  importedCount: number;
+
+  /**
+   * Transactions not already present in stored history.
+   */
+  addedCount: number;
+
+  /**
+   * Transactions already present and recognised as overlap.
+   */
+  overlappingCount: number;
+
+  /**
+   * Total history retained after the merge.
+   */
+  totalStoredCount: number;
+}
+
 export interface StoredAibImportSnapshot {
   version: 1;
   source: "aib";
   fileName: string;
   importedAt: string;
   latestBalance?: number;
+  lastImportSummary: ImportMergeSummary;
   transactions: NormalisedTransaction[];
 }
 
@@ -20,6 +43,7 @@ export interface StoredRevolutImportSnapshot {
   fileName: string;
   importedAt: string;
   latestBalances: Record<string, number>;
+  lastImportSummary: ImportMergeSummary;
   transactions: NormalisedTransaction[];
 }
 
@@ -30,6 +54,94 @@ export interface StoredCombinedImportSnapshot {
   aib: StoredAibImportSnapshot | null;
   revolut: StoredRevolutImportSnapshot | null;
   transactions: NormalisedTransaction[];
+}
+
+interface TransactionMergeResult {
+  transactions: NormalisedTransaction[];
+  summary: ImportMergeSummary;
+}
+
+function getTransactionIdentity(transaction: NormalisedTransaction): string {
+  return `${transaction.source}:${transaction.externalId}`;
+}
+
+function sortTransactions(
+  transactions: NormalisedTransaction[],
+): NormalisedTransaction[] {
+  return transactions.slice().sort((first, second) => {
+    const dateComparison = first.postedDate.localeCompare(second.postedDate);
+
+    if (dateComparison !== 0) {
+      return dateComparison;
+    }
+
+    const accountComparison = first.accountId.localeCompare(second.accountId);
+
+    if (accountComparison !== 0) {
+      return accountComparison;
+    }
+
+    return first.externalId.localeCompare(second.externalId);
+  });
+}
+
+/**
+ * Combines existing history with the latest imported file.
+ *
+ * Exact identities are deduplicated using source + externalId.
+ * When the same transaction appears in both collections, the
+ * newly imported version wins.
+ */
+function mergeTransactionHistory(
+  existingTransactions: NormalisedTransaction[],
+  importedTransactions: NormalisedTransaction[],
+): TransactionMergeResult {
+  const existingByIdentity = new Map<string, NormalisedTransaction>();
+
+  existingTransactions.forEach((transaction) => {
+    existingByIdentity.set(getTransactionIdentity(transaction), transaction);
+  });
+
+  const importedByIdentity = new Map<string, NormalisedTransaction>();
+
+  importedTransactions.forEach((transaction) => {
+    importedByIdentity.set(getTransactionIdentity(transaction), transaction);
+  });
+
+  let overlappingCount = 0;
+
+  importedByIdentity.forEach((_transaction, identity) => {
+    if (existingByIdentity.has(identity)) {
+      overlappingCount += 1;
+    }
+  });
+
+  const addedCount = importedByIdentity.size - overlappingCount;
+
+  const mergedByIdentity = new Map(existingByIdentity);
+
+  /**
+   * Imported copies deliberately overwrite stored copies.
+   * This allows the newest bank export to correct metadata
+   * or normalisation for a transaction already in history.
+   */
+  importedByIdentity.forEach((transaction, identity) => {
+    mergedByIdentity.set(identity, transaction);
+  });
+
+  const transactions = ensureUniqueTransactionIds(
+    sortTransactions([...mergedByIdentity.values()]),
+  );
+
+  return {
+    transactions,
+    summary: {
+      importedCount: importedTransactions.length,
+      addedCount,
+      overlappingCount,
+      totalStoredCount: transactions.length,
+    },
+  };
 }
 
 function findLatestBalance(
@@ -49,7 +161,16 @@ function findLatestBalance(
 
   const latestTransaction = transactionsWithBalances.reduce(
     (latest, transaction) => {
-      if (transaction.postedDate >= latest.postedDate) {
+      if (transaction.postedDate > latest.postedDate) {
+        return transaction;
+      }
+
+      /**
+       * Rows on the same date remain in their imported
+       * order. Using the later row means the final running
+       * balance for that date is retained.
+       */
+      if (transaction.postedDate === latest.postedDate) {
         return transaction;
       }
 
@@ -105,19 +226,43 @@ function getLatestImportedAt(
   );
 }
 
+function getLegacyImportSummary(
+  transactions: NormalisedTransaction[],
+): ImportMergeSummary {
+  return {
+    importedCount: transactions.length,
+    addedCount: transactions.length,
+    overlappingCount: 0,
+    totalStoredCount: transactions.length,
+  };
+}
+
 export function saveAibImportSnapshot(
   fileName: string,
   transactions: NormalisedTransaction[],
 ): StoredAibImportSnapshot {
-  const dedupedTransactions = ensureUniqueTransactionIds(transactions);
+  const existingSnapshot = loadAibImportSnapshot();
+
+  const mergeResult = mergeTransactionHistory(
+    existingSnapshot?.transactions ?? [],
+    transactions,
+  );
+
+  /**
+   * The newest file is the source of truth for the current
+   * balance. We deliberately do not derive it from older
+   * retained history.
+   */
+  const latestImportedBalance = findLatestBalance(transactions);
 
   const snapshot: StoredAibImportSnapshot = {
     version: 1,
     source: "aib",
     fileName,
     importedAt: new Date().toISOString(),
-    latestBalance: findLatestBalance(dedupedTransactions),
-    transactions: dedupedTransactions,
+    latestBalance: latestImportedBalance ?? existingSnapshot?.latestBalance,
+    lastImportSummary: mergeResult.summary,
+    transactions: mergeResult.transactions,
   };
 
   window.localStorage.setItem(AIB_IMPORT_STORAGE_KEY, JSON.stringify(snapshot));
@@ -147,9 +292,15 @@ export function loadAibImportSnapshot(): StoredAibImportSnapshot | null {
       return null;
     }
 
+    const transactions = ensureUniqueTransactionIds(
+      sortTransactions(parsed.transactions),
+    );
+
     return {
       ...parsed,
-      transactions: ensureUniqueTransactionIds(parsed.transactions),
+      lastImportSummary:
+        parsed.lastImportSummary ?? getLegacyImportSummary(transactions),
+      transactions,
     };
   } catch {
     return null;
@@ -168,15 +319,31 @@ export function saveRevolutImportSnapshot(
   fileName: string,
   transactions: NormalisedTransaction[],
 ): StoredRevolutImportSnapshot {
-  const dedupedTransactions = ensureUniqueTransactionIds(transactions);
+  const existingSnapshot = loadRevolutImportSnapshot();
+
+  const mergeResult = mergeTransactionHistory(
+    existingSnapshot?.transactions ?? [],
+    transactions,
+  );
+
+  /**
+   * Update balances only for accounts represented in the
+   * latest file. Balances for accounts absent from this
+   * upload remain available from the previous snapshot.
+   */
+  const latestImportedBalances = findLatestBalancesByAccount(transactions);
 
   const snapshot: StoredRevolutImportSnapshot = {
     version: 1,
     source: "revolut",
     fileName,
     importedAt: new Date().toISOString(),
-    latestBalances: findLatestBalancesByAccount(dedupedTransactions),
-    transactions: dedupedTransactions,
+    latestBalances: {
+      ...(existingSnapshot?.latestBalances ?? {}),
+      ...latestImportedBalances,
+    },
+    lastImportSummary: mergeResult.summary,
+    transactions: mergeResult.transactions,
   };
 
   window.localStorage.setItem(
@@ -211,9 +378,15 @@ export function loadRevolutImportSnapshot(): StoredRevolutImportSnapshot | null 
       return null;
     }
 
+    const transactions = ensureUniqueTransactionIds(
+      sortTransactions(parsed.transactions),
+    );
+
     return {
       ...parsed,
-      transactions: ensureUniqueTransactionIds(parsed.transactions),
+      lastImportSummary:
+        parsed.lastImportSummary ?? getLegacyImportSummary(transactions),
+      transactions,
     };
   } catch {
     return null;
@@ -243,7 +416,14 @@ export function loadCombinedImportSnapshot(): StoredCombinedImportSnapshot | nul
     return null;
   }
 
-  const transactions = ensureUniqueTransactionIds(
+  /**
+   * Cross-provider identities include their source, so an
+   * AIB transfer and its matching Revolut transfer remain
+   * separate records. They can be linked semantically in a
+   * future internal-transfer feature.
+   */
+  const combinedMerge = mergeTransactionHistory(
+    [],
     availableSnapshots.flatMap((snapshot) => snapshot.transactions),
   );
 
@@ -253,6 +433,6 @@ export function loadCombinedImportSnapshot(): StoredCombinedImportSnapshot | nul
     sourceFileNames: availableSnapshots.map((snapshot) => snapshot.fileName),
     aib,
     revolut,
-    transactions,
+    transactions: combinedMerge.transactions,
   };
 }

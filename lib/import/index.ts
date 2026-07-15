@@ -26,6 +26,7 @@ export {
 } from "./storage";
 
 export type {
+  ImportMergeSummary,
   StoredAibImportSnapshot,
   StoredCombinedImportSnapshot,
   StoredRevolutImportSnapshot,
