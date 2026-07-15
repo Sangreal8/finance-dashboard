@@ -1,3 +1,4 @@
+import { generateTransactionIdentity } from "./identity";
 import type {
   ImportedTransaction,
   ImportResult,
@@ -7,6 +8,7 @@ import type {
 import type { XlsxCellValue, XlsxWorkbook } from "./xlsx";
 
 const REVOLUT_CURRENT_ACCOUNT_ID = "revolut-current";
+
 const REVOLUT_SAVINGS_ACCOUNT_ID = "revolut-savings";
 
 const REQUIRED_HEADERS = [
@@ -165,27 +167,20 @@ function getTransactionAmount(
   return amount;
 }
 
-function createExternalId(parts: string[]): string {
-  const value = parts.join("|");
-
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-
-  return Math.abs(hash).toString(36);
-}
-
 function createMetadata(
   row: Record<string, XlsxCellValue>,
 ): Record<string, string> {
   return {
     transactionType: getText(row, "Type"),
+
     product: getText(row, "Product"),
+
     startedDate: getText(row, "Started Date"),
+
     completedDate: getText(row, "Completed Date"),
+
     state: getText(row, "State"),
+
     fee: getText(row, "Fee"),
   };
 }
@@ -200,9 +195,11 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
       source: "revolut",
       accounts: [],
       transactions: [],
+
       warnings: [
         {
           code: "missing-field",
+
           message: `The Revolut workbook is missing required columns: ${missingHeaders.join(
             ", ",
           )}.`,
@@ -212,22 +209,29 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
   }
 
   const transactions: ImportedTransaction[] = [];
+
   const warnings: ImportWarning[] = [];
+
   const seenExternalIds = new Set<string>();
 
   workbook.rows.forEach((row, index) => {
     const rowNumber = index + 2;
 
     const transactionType = getText(row, "Type");
+
     const product = getText(row, "Product");
+
     const rawDescription = getText(row, "Description");
+
     const state = getText(row, "State").toUpperCase();
+
     const currency = getText(row, "Currency").toUpperCase();
 
     if (!transactionType || !product || !rawDescription) {
       warnings.push({
         row: rowNumber,
         code: "missing-field",
+
         message:
           "The Revolut row is missing its type, product, or description.",
       });
@@ -239,6 +243,7 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
       warnings.push({
         row: rowNumber,
         code: "unsupported-row",
+
         message: `Skipped ${state || "unknown-state"} transaction "${rawDescription}".`,
       });
 
@@ -249,6 +254,7 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
       warnings.push({
         row: rowNumber,
         code: "unsupported-row",
+
         message: `Skipped ${currency || "unknown-currency"} transaction "${rawDescription}". Revolut Import v1 currently supports EUR only.`,
       });
 
@@ -261,6 +267,7 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
       warnings.push({
         row: rowNumber,
         code: "invalid-date",
+
         message: `Could not read the completed date for "${rawDescription}".`,
       });
 
@@ -268,13 +275,16 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
     }
 
     const parsedAmount = getNumber(row, "Amount");
+
     const parsedFee = getNumber(row, "Fee");
+
     const parsedBalance = getNumber(row, "Balance");
 
     if (parsedAmount === null || parsedFee === null || parsedBalance === null) {
       warnings.push({
         row: rowNumber,
         code: "invalid-amount",
+
         message: `Could not read the amount, fee, or balance for "${rawDescription}".`,
       });
 
@@ -291,6 +301,7 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
       warnings.push({
         row: rowNumber,
         code: "unsupported-row",
+
         message: `Skipped zero-value transaction "${rawDescription}".`,
       });
 
@@ -299,7 +310,7 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
 
     const accountId = getAccountId(product);
 
-    const externalId = createExternalId([
+    const externalId = generateTransactionIdentity([
       accountId,
       transactionType,
       product,
@@ -316,6 +327,7 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
       warnings.push({
         row: rowNumber,
         code: "duplicate-row",
+
         message: `Skipped duplicate Revolut transaction "${rawDescription}".`,
       });
 
@@ -330,6 +342,7 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
       warnings.push({
         row: rowNumber,
         code: "unsupported-row",
+
         message: `Imported unrecognised Revolut transaction type "${transactionType}" for review.`,
       });
     }
@@ -354,30 +367,41 @@ export function parseRevolutWorkbook(workbook: XlsxWorkbook): ImportResult {
 
   return {
     source: "revolut",
+
     accounts: [
       ...(accountIds.has(REVOLUT_CURRENT_ACCOUNT_ID)
         ? [
             {
               source: "revolut" as const,
+
               externalAccountId: REVOLUT_CURRENT_ACCOUNT_ID,
+
               name: "Revolut Current",
+
               type: "current" as const,
+
               currency: "EUR",
             },
           ]
         : []),
+
       ...(accountIds.has(REVOLUT_SAVINGS_ACCOUNT_ID)
         ? [
             {
               source: "revolut" as const,
+
               externalAccountId: REVOLUT_SAVINGS_ACCOUNT_ID,
+
               name: "Revolut Savings",
+
               type: "savings" as const,
+
               currency: "EUR",
             },
           ]
         : []),
     ],
+
     transactions,
     warnings,
   };
@@ -390,9 +414,11 @@ export function parseRevolutCsv(csv: string): ImportResult {
     source: "revolut",
     accounts: [],
     transactions: [],
+
     warnings: [
       {
         code: "unsupported-row",
+
         message: "Revolut account statements must be imported in XLSX format.",
       },
     ],
@@ -404,11 +430,14 @@ export function parseRevolutCreditCardCsv(csv: string): ImportResult {
 
   return {
     source: "revolut-credit-card",
+
     accounts: [],
     transactions: [],
+
     warnings: [
       {
         code: "unsupported-row",
+
         message: "Revolut credit-card import has not been implemented yet.",
       },
     ],

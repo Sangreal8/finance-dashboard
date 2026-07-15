@@ -1,4 +1,5 @@
 import { parseCsv } from "./csv";
+import { generateTransactionIdentity } from "./identity";
 import type {
   CsvRow,
   ImportedTransaction,
@@ -95,34 +96,33 @@ function parseAibDate(value: string): string | null {
   return null;
 }
 
-function createExternalId(
-  accountId: string,
-  date: string,
-  description: string,
-  amount: number,
-  balanceAfter?: number,
-): string {
-  const value = [
+function createExternalId({
+  accountId,
+  postedDate,
+  rawDescription,
+  amount,
+  balanceAfter,
+}: {
+  accountId: string;
+  postedDate: string;
+  rawDescription: string;
+  amount: number;
+  balanceAfter?: number;
+}): string {
+  return generateTransactionIdentity([
     accountId,
-    date,
-    description,
+    postedDate,
+    rawDescription,
     amount.toFixed(2),
     balanceAfter?.toFixed(2) ?? "",
-  ].join("|");
-
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-
-  return Math.abs(hash).toString(36);
+  ]);
 }
 
 export function parseAibCsv(csv: string): ImportResult {
   const rows = parseCsv(csv);
 
   const transactions: ImportedTransaction[] = [];
+
   const warnings: ImportWarning[] = [];
 
   rows.forEach((rawRow, index) => {
@@ -210,23 +210,29 @@ export function parseAibCsv(csv: string): ImportResult {
 
     transactions.push({
       source: "aib",
-      externalId: createExternalId(
+
+      externalId: createExternalId({
         accountId,
         postedDate,
         rawDescription,
         amount,
         balanceAfter,
-      ),
+      }),
+
       accountId,
       postedDate,
       rawDescription,
       amount,
       currency,
       balanceAfter,
+
       metadata: {
         transactionType: getFirstValue(row, ["Transaction Type"]),
+
         description1: getFirstValue(row, ["Description1"]),
+
         description2: getFirstValue(row, ["Description2"]),
+
         description3: getFirstValue(row, ["Description3"]),
       },
     });
@@ -238,6 +244,7 @@ export function parseAibCsv(csv: string): ImportResult {
 
   return {
     source: "aib",
+
     accounts: accountIds.map((accountId) => ({
       source: "aib",
       externalAccountId: accountId,
@@ -245,6 +252,7 @@ export function parseAibCsv(csv: string): ImportResult {
       type: "current",
       currency: "EUR",
     })),
+
     transactions,
     warnings,
   };
