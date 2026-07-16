@@ -94,6 +94,8 @@ export interface MonthlyPlan {
   safetyBuffer: number;
 }
 
+export type ReserveStatus = "planned" | "reserved" | "fulfilled";
+
 export interface Reserve {
   id: string;
   name: string;
@@ -101,8 +103,8 @@ export interface Reserve {
   type: CommitmentType;
   dueDate?: string;
   mandatory: boolean;
-  active: boolean;
-  reserved: boolean;
+  status: ReserveStatus;
+  fulfilledDate?: string;
   confidence: Confidence;
 }
 

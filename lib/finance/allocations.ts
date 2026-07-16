@@ -6,9 +6,7 @@ import type {
   Reserve,
 } from "./types";
 
-function commitmentToAllocation(
-  commitment: PlannedCommitment
-): Allocation {
+function commitmentToAllocation(commitment: PlannedCommitment): Allocation {
   return {
     id: `commitment-${commitment.id}`,
     sourceId: commitment.id,
@@ -22,9 +20,7 @@ function commitmentToAllocation(
   };
 }
 
-function forecastItemToAllocation(
-  item: ForecastItem
-): Allocation {
+function forecastItemToAllocation(item: ForecastItem): Allocation {
   return {
     id: `forecast-${item.id}`,
     sourceId: item.id,
@@ -37,9 +33,7 @@ function forecastItemToAllocation(
   };
 }
 
-function reserveToAllocation(
-  reserve: Reserve
-): Allocation {
+function reserveToAllocation(reserve: Reserve): Allocation {
   return {
     id: `reserve-${reserve.id}`,
     sourceId: reserve.id,
@@ -55,14 +49,14 @@ function reserveToAllocation(
 
 export function buildAllocations(
   plan: MonthlyPlan,
-  reserves: Reserve[] = []
+  reserves: Reserve[] = [],
 ): Allocation[] {
   const commitmentAllocations = plan.commitments
     .filter(
       (commitment) =>
         commitment.mandatory &&
         commitment.status !== "paid" &&
-        commitment.status !== "cancelled"
+        commitment.status !== "cancelled",
     )
     .map(commitmentToAllocation);
 
@@ -70,12 +64,15 @@ export function buildAllocations(
     .filter((item) => item.confidence !== "optional")
     .map(forecastItemToAllocation);
 
+  /**
+   * Only money that is currently reserved reduces
+   * Safe to Spend.
+   *
+   * Planned reserves are future intentions, while
+   * fulfilled reserves have already been used.
+   */
   const reserveAllocations = reserves
-    .filter(
-      (reserve) =>
-        reserve.active &&
-        reserve.reserved
-    )
+    .filter((reserve) => reserve.status === "reserved")
     .map(reserveToAllocation);
 
   return [
@@ -85,12 +82,9 @@ export function buildAllocations(
   ];
 }
 
-export function getAllocatedCash(
-  allocations: Allocation[]
-): number {
+export function getAllocatedCash(allocations: Allocation[]): number {
   return allocations.reduce(
-    (total, allocation) =>
-      total + allocation.amount,
-    0
+    (total, allocation) => total + allocation.amount,
+    0,
   );
 }

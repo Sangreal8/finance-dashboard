@@ -7,8 +7,8 @@ export const reserves: Reserve[] = [
     amount: 584.81,
     type: "legal",
     mandatory: true,
-    active: true,
-    reserved: true,
+    status: "fulfilled",
+    fulfilledDate: "2026-07-14",
     confidence: "estimated",
   },
   {
@@ -18,8 +18,7 @@ export const reserves: Reserve[] = [
     type: "debt",
     dueDate: "2026-07-31",
     mandatory: true,
-    active: true,
-    reserved: false,
+    status: "planned",
     confidence: "confirmed",
   },
   {
@@ -29,8 +28,7 @@ export const reserves: Reserve[] = [
     type: "discretionary",
     dueDate: "2026-09-10",
     mandatory: false,
-    active: true,
-    reserved: false,
+    status: "planned",
     confidence: "estimated",
   },
 ];
