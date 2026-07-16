@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, useMemo, useState } from "react";
+import { CurrentBalancesCard } from "@/components/settings/CurrentBalancesCard";
 import { monthlyPlan } from "@/data/monthlyPlan";
 import {
   normaliseTransactions,
@@ -368,7 +369,7 @@ export default function ImportTransactionsPage() {
             Revolut account statement before saving it to the dashboard.
           </p>
         </header>
-
+        <CurrentBalancesCard />
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 text-center">
             <div className="mx-auto max-w-md">

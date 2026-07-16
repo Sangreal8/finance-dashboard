@@ -33,6 +33,13 @@ function formatImportTime(importedAt: string) {
   }).format(new Date(importedAt));
 }
 
+function formatDate(date: string) {
+  return new Intl.DateTimeFormat("en-IE", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(`${date}T12:00:00`));
+}
+
 function getSourceLabel(freshness: PlanningDataFreshness) {
   if (freshness.includesAib && freshness.includesRevolut) {
     return "AIB + Revolut";
@@ -57,6 +64,24 @@ function getFreshnessLabel(freshness: PlanningDataFreshness) {
   return `Updated from ${getSourceLabel(freshness)} ${formatImportTime(
     freshness.importedAt,
   )}`;
+}
+
+function getOverrideLabel(freshness: PlanningDataFreshness) {
+  const overrides = freshness.balanceOverrides ?? [];
+
+  if (overrides.length === 0) {
+    return null;
+  }
+
+  if (overrides.length === 1 && overrides[0].accountId === "aib-current") {
+    return "AIB current balance confirmed";
+  }
+
+  if (overrides.length === 1 && overrides[0].accountId === "revolut-current") {
+    return "Revolut current balance confirmed";
+  }
+
+  return "Current account balances confirmed";
 }
 
 export function DashboardClient({
@@ -110,6 +135,8 @@ export function DashboardClient({
 
   const freshnessLabel = getFreshnessLabel(dataFreshness);
 
+  const overrideLabel = getOverrideLabel(dataFreshness);
+
   return (
     <PageShell>
       <PageHeader
@@ -117,20 +144,34 @@ export function DashboardClient({
         title="Good evening, Josh"
         description="A calm view of what is already committed, what is still flexible, and what the month is likely to look like."
         actions={
-          freshnessLabel ? (
+          freshnessLabel || overrideLabel ? (
             <div className="rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm text-zinc-600 shadow-sm">
-              <p className="font-medium text-zinc-950">{freshnessLabel}</p>
+              {freshnessLabel && (
+                <p className="font-medium text-zinc-950">{freshnessLabel}</p>
+              )}
 
               {dataFreshness.latestTransactionDate && (
                 <p className="mt-1 text-xs text-zinc-500">
                   Latest transaction{" "}
-                  {new Intl.DateTimeFormat("en-IE", {
-                    day: "numeric",
-                    month: "short",
-                  }).format(
-                    new Date(`${dataFreshness.latestTransactionDate}T12:00:00`),
-                  )}
+                  {formatDate(dataFreshness.latestTransactionDate)}
                 </p>
+              )}
+
+              {overrideLabel && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-emerald-700">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-bold">
+                    ✓
+                  </span>
+
+                  <span>
+                    {overrideLabel}
+                    {dataFreshness.latestBalanceOverrideAt
+                      ? ` ${formatImportTime(
+                          dataFreshness.latestBalanceOverrideAt,
+                        )}`
+                      : ""}
+                  </span>
+                </div>
               )}
 
               <button
