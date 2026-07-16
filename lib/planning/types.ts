@@ -16,6 +16,11 @@ import type { ReconciliationSummary } from "@/lib/reconciliation";
 
 export type PlanningDataSource = "manual" | "combined-import";
 
+export interface PlanningBalanceOverrideFreshness {
+  accountId: string;
+  updatedAt: string;
+}
+
 export interface PlanningDataFreshness {
   source: PlanningDataSource;
   importedAt?: string;
@@ -24,24 +29,39 @@ export interface PlanningDataFreshness {
   latestBalanceDate?: string;
   includesAib?: boolean;
   includesRevolut?: boolean;
+
+  /**
+   * Accounts whose imported or static balance has been
+   * replaced by a manually confirmed current balance.
+   */
+  balanceOverrides?: PlanningBalanceOverrideFreshness[];
+
+  /**
+   * Most recent update across all active balance
+   * overrides.
+   */
+  latestBalanceOverrideAt?: string;
 }
 
 export interface PlanningForecasts {
   /**
    * Existing manually maintained forecast items.
-   * These remain the trusted values used by the finance engine.
+   * These remain the trusted values used by the
+   * finance engine.
    */
   active: ForecastItem[];
 
   /**
    * Forecasts calculated from transaction history.
-   * These are currently informational and do not alter Safe to Spend.
+   * These are currently informational and do not
+   * alter Safe to Spend.
    */
   calculated: CategoryForecast[];
 
   /**
-   * Calculated forecasts that meet the minimum confidence threshold.
-   * These can replace manual forecasts in a later commit.
+   * Calculated forecasts that meet the minimum
+   * confidence threshold. These can replace manual
+   * forecasts in a later commit.
    */
   eligible: ForecastItem[];
 
@@ -64,9 +84,11 @@ export interface PlanningSnapshot {
   importedSnapshot: StoredCombinedImportSnapshot | null;
 
   transactions: EnrichedTransaction[];
+
   merchantProfiles: MerchantProfile[];
 
   spendingProfiles: SpendingProfileSummary | null;
+
   forecasts: PlanningForecasts;
 
   reconciliation: ReconciliationSummary | null;

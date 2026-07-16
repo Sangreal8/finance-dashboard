@@ -1,6 +1,8 @@
 import { accounts } from "@/data/accounts";
 import { monthlyPlan } from "@/data/monthlyPlan";
 import { reserves } from "@/data/reserves";
+import { loadBalanceOverridesSnapshot } from "@/lib/balances";
+import type { AccountBalanceOverride } from "@/lib/balances";
 import {
   buildCategoryForecasts,
   buildSpendingProfileSummary,
@@ -51,6 +53,10 @@ function getMonthEnd(referenceDate: Date): string {
   );
 }
 
+/**
+ * Applies balances proven by the most recent bank imports
+ * over the static fallback account data.
+ */
 function updateImportedBalances(
   currentAccounts: Account[],
   importedSnapshot: StoredCombinedImportSnapshot,
@@ -79,13 +85,64 @@ function updateImportedBalances(
     }
 
     /**
-     * The Revolut export exposes Savings as one aggregate product.
-     * It cannot reliably split that balance between the Solicitors
-     * and Sweepstake pockets, so those manually maintained balances
-     * deliberately remain untouched.
+     * The Revolut export exposes Savings as one
+     * aggregate product. It cannot reliably split
+     * that balance between individual pockets, so
+     * those manually maintained balances remain
+     * untouched.
      */
     return account;
   });
+}
+
+/**
+ * A manually confirmed live balance has the highest
+ * precedence because it reflects the user's banking app
+ * today, even when the latest transaction export lags
+ * behind.
+ */
+function applyBalanceOverrides(
+  currentAccounts: Account[],
+  overrides: Record<string, AccountBalanceOverride>,
+): Account[] {
+  return currentAccounts.map((account) => {
+    const override = overrides[account.id];
+
+    if (!override) {
+      return account;
+    }
+
+    return {
+      ...account,
+      balance: override.balance,
+    };
+  });
+}
+
+function getBalanceOverrideFreshness(
+  overrides: Record<string, AccountBalanceOverride>,
+): Pick<PlanningDataFreshness, "balanceOverrides" | "latestBalanceOverrideAt"> {
+  const balanceOverrides = Object.values(overrides)
+    .map((override) => ({
+      accountId: override.accountId,
+      updatedAt: override.updatedAt,
+    }))
+    .sort((first, second) => first.accountId.localeCompare(second.accountId));
+
+  if (balanceOverrides.length === 0) {
+    return {};
+  }
+
+  const latestBalanceOverrideAt = balanceOverrides.reduce(
+    (latest, override) =>
+      override.updatedAt > latest ? override.updatedAt : latest,
+    balanceOverrides[0].updatedAt,
+  );
+
+  return {
+    balanceOverrides,
+    latestBalanceOverrideAt,
+  };
 }
 
 function applyReconciliationMatch(
@@ -188,6 +245,7 @@ function getLatestBalanceDate(
 
 function buildImportedFreshness(
   importedSnapshot: StoredCombinedImportSnapshot,
+  balanceOverrides: Record<string, AccountBalanceOverride>,
 ): PlanningDataFreshness {
   return {
     source: "combined-import",
@@ -197,11 +255,17 @@ function buildImportedFreshness(
     latestBalanceDate: getLatestBalanceDate(importedSnapshot),
     includesAib: importedSnapshot.aib !== null,
     includesRevolut: importedSnapshot.revolut !== null,
+    ...getBalanceOverrideFreshness(balanceOverrides),
   };
 }
 
-function buildManualPlanningSnapshot(referenceDate: Date): PlanningSnapshot {
+function buildManualPlanningSnapshot(
+  referenceDate: Date,
+  balanceOverrides: Record<string, AccountBalanceOverride>,
+): PlanningSnapshot {
   const referenceDateString = formatLocalDate(referenceDate);
+
+  const liveAccounts = applyBalanceOverrides(accounts, balanceOverrides);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -209,15 +273,16 @@ function buildManualPlanningSnapshot(referenceDate: Date): PlanningSnapshot {
 
     dataFreshness: {
       source: "manual",
+      ...getBalanceOverrideFreshness(balanceOverrides),
     },
 
-    accounts,
+    accounts: liveAccounts,
     plan: monthlyPlan,
     reserves,
 
-    position: buildFinancialPosition(accounts, monthlyPlan, reserves),
+    position: buildFinancialPosition(liveAccounts, monthlyPlan, reserves),
 
-    timeline: buildFinanceTimeline(accounts, monthlyPlan),
+    timeline: buildFinanceTimeline(liveAccounts, monthlyPlan),
 
     importedSnapshot: null,
 
@@ -239,6 +304,7 @@ function buildManualPlanningSnapshot(referenceDate: Date): PlanningSnapshot {
 
 interface ImportedKnowledge {
   merchantProfiles: MerchantProfile[];
+
   transactions: EnrichedTransaction[];
 }
 
@@ -267,10 +333,16 @@ function buildImportedKnowledge(
 function buildImportedPlanningSnapshot(
   importedSnapshot: StoredCombinedImportSnapshot,
   referenceDate: Date,
+  balanceOverrides: Record<string, AccountBalanceOverride>,
 ): PlanningSnapshot {
   const referenceDateString = formatLocalDate(referenceDate);
 
-  const liveAccounts = updateImportedBalances(accounts, importedSnapshot);
+  const importedAccounts = updateImportedBalances(accounts, importedSnapshot);
+
+  const liveAccounts = applyBalanceOverrides(
+    importedAccounts,
+    balanceOverrides,
+  );
 
   const reconciliationMatches = reconcileCommitments(
     monthlyPlan.commitments,
@@ -307,7 +379,7 @@ function buildImportedPlanningSnapshot(
     generatedAt: new Date().toISOString(),
     referenceDate: referenceDateString,
 
-    dataFreshness: buildImportedFreshness(importedSnapshot),
+    dataFreshness: buildImportedFreshness(importedSnapshot, balanceOverrides),
 
     accounts: liveAccounts,
     plan: livePlan,
@@ -335,20 +407,32 @@ function buildImportedPlanningSnapshot(
 }
 
 /**
- * Builds the complete planning state from the
- * best locally available import data.
+ * Builds the complete planning state from the best locally
+ * available data.
  *
- * This function reads browser storage and must
- * therefore be called from client-side code.
+ * Balance precedence:
+ *
+ * 1. Manually confirmed current balance
+ * 2. Latest imported statement balance
+ * 3. Static account fallback
+ *
+ * This function reads browser storage and must therefore
+ * be called from client-side code.
  */
 export function buildStoredPlanningSnapshot(
   referenceDate = new Date(),
 ): PlanningSnapshot {
   const importedSnapshot = loadCombinedImportSnapshot();
 
+  const balanceOverrides = loadBalanceOverridesSnapshot().overrides;
+
   if (!importedSnapshot) {
-    return buildManualPlanningSnapshot(referenceDate);
+    return buildManualPlanningSnapshot(referenceDate, balanceOverrides);
   }
 
-  return buildImportedPlanningSnapshot(importedSnapshot, referenceDate);
+  return buildImportedPlanningSnapshot(
+    importedSnapshot,
+    referenceDate,
+    balanceOverrides,
+  );
 }
