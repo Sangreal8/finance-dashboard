@@ -132,6 +132,20 @@ export interface FinancialStatus {
   description: string;
 }
 
+export interface SafeToSpendAccountRow {
+  id: string;
+  name: string;
+  amount: number;
+}
+
+export interface SafeToSpendCommitmentRow {
+  id: string;
+  name: string;
+  amount: number;
+  dueDate?: string;
+  confidence: Confidence;
+}
+
 /**
  * Factual explanation of how much cash is genuinely
  * uncommitted right now.
@@ -141,6 +155,9 @@ export interface FinancialStatus {
  * obligations.
  */
 export interface SafeToSpendBreakdown {
+  accountBalances: SafeToSpendAccountRow[];
+  commitments: SafeToSpendCommitmentRow[];
+
   availableCash: number;
   remainingCommitments: number;
   reservedMoney: number;

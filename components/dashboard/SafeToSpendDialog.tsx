@@ -22,25 +22,37 @@ function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IE", {
     style: "currency",
     currency: "EUR",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 
-interface BreakdownRowProps {
+function formatDate(date?: string) {
+  if (!date) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-IE", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(`${date}T12:00:00`));
+}
+
+interface DetailRowProps {
   label: string;
   amount: number;
   description?: string;
   subtract?: boolean;
 }
 
-function BreakdownRow({
+function DetailRow({
   label,
   amount,
   description,
   subtract = false,
-}: BreakdownRowProps) {
+}: DetailRowProps) {
   return (
-    <div className="flex items-start justify-between gap-6 py-4">
+    <div className="flex items-start justify-between gap-6 py-3">
       <div>
         <p className="text-sm font-medium text-zinc-950">{label}</p>
 
@@ -49,7 +61,26 @@ function BreakdownRow({
         )}
       </div>
 
-      <p className="shrink-0 text-sm font-semibold text-zinc-950">
+      <p className="shrink-0 text-sm font-semibold tabular-nums text-zinc-950">
+        {subtract ? "−" : ""}
+        {formatCurrency(Math.abs(amount))}
+      </p>
+    </div>
+  );
+}
+
+interface SectionTotalProps {
+  label: string;
+  amount: number;
+  subtract?: boolean;
+}
+
+function SectionTotal({ label, amount, subtract = false }: SectionTotalProps) {
+  return (
+    <div className="flex items-center justify-between gap-6 border-t border-zinc-200 pt-3">
+      <p className="text-sm font-semibold text-zinc-950">{label}</p>
+
+      <p className="text-sm font-semibold tabular-nums text-zinc-950">
         {subtract ? "−" : ""}
         {formatCurrency(Math.abs(amount))}
       </p>
@@ -81,47 +112,103 @@ export function SafeToSpendDialog({
           </DialogTitle>
 
           <DialogDescription className="leading-6">
-            Cash that remains after known commitments, reserved money and your
-            safety buffer are protected.
+            The exact account balances and unpaid commitments used to calculate
+            what is genuinely free to spend.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="px-6 py-2">
-          <div className="divide-y divide-zinc-100">
-            <BreakdownRow
+        <div className="px-6 py-6">
+          <section>
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-zinc-400">
+              Current balances
+            </p>
+
+            <div className="mt-2 divide-y divide-zinc-100">
+              {breakdown.accountBalances.map((account) => (
+                <DetailRow
+                  key={account.id}
+                  label={account.name}
+                  amount={account.amount}
+                />
+              ))}
+            </div>
+
+            <SectionTotal
               label="Available today"
               amount={breakdown.availableCash}
-              description="Cash currently available across accounts included in the calculation."
             />
+          </section>
 
-            <BreakdownRow
-              label="Known commitments"
-              amount={breakdown.remainingCommitments}
-              description="Confirmed obligations in the current plan that have not yet been paid."
-              subtract
-            />
+          <section className="mt-7">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-zinc-400">
+              Remaining commitments
+            </p>
 
-            <BreakdownRow
-              label="Reserved money"
-              amount={breakdown.reservedMoney}
-              description="Money deliberately protected for future costs."
-              subtract
-            />
+            {breakdown.commitments.length > 0 ? (
+              <div className="mt-2 divide-y divide-zinc-100">
+                {breakdown.commitments.map((commitment) => {
+                  const dueDate = formatDate(commitment.dueDate);
 
-            <BreakdownRow
-              label="Safety buffer"
-              amount={breakdown.safetyBuffer}
-              description="The amount kept untouched as an additional margin of safety."
-              subtract
-            />
-          </div>
+                  const description = dueDate
+                    ? `Due ${dueDate}${
+                        commitment.confidence === "estimated"
+                          ? " · Estimated"
+                          : ""
+                      }`
+                    : commitment.confidence === "estimated"
+                      ? "Estimated"
+                      : undefined;
 
-          <div className="my-4 rounded-2xl bg-zinc-950 px-5 py-5 text-white">
+                  return (
+                    <DetailRow
+                      key={commitment.id}
+                      label={commitment.name}
+                      amount={commitment.amount}
+                      description={description}
+                      subtract
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-zinc-500">
+                No unpaid commitments are currently included in the plan.
+              </p>
+            )}
+
+            <div className="mt-2">
+              <SectionTotal
+                label="Known commitments"
+                amount={breakdown.remainingCommitments}
+                subtract
+              />
+            </div>
+          </section>
+
+          <section className="mt-7 rounded-2xl border border-zinc-200 bg-zinc-50 px-4">
+            <div className="divide-y divide-zinc-200">
+              <DetailRow
+                label="Reserved money"
+                amount={breakdown.reservedMoney}
+                description="Money currently protected for a specific future cost."
+                subtract
+              />
+
+              <DetailRow
+                label="Safety buffer"
+                amount={breakdown.safetyBuffer}
+                description="Extra cash deliberately kept untouched."
+                subtract
+              />
+            </div>
+          </section>
+
+          <div className="my-6 rounded-2xl bg-zinc-950 px-5 py-5 text-white">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-sm text-zinc-400">Safe to Spend</p>
 
-                <p className="mt-1 text-3xl font-semibold tracking-tight">
+                <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
                   {formatCurrency(breakdown.safeToSpend)}
                 </p>
               </div>
@@ -130,7 +217,7 @@ export function SafeToSpendDialog({
             </div>
           </div>
 
-          <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
             <div className="flex items-start justify-between gap-5">
               <div>
                 <p className="text-sm font-medium text-zinc-950">
@@ -143,8 +230,9 @@ export function SafeToSpendDialog({
               </div>
 
               <div className="shrink-0 text-right">
-                <p className="text-sm font-semibold text-zinc-950">
+                <p className="text-sm font-semibold tabular-nums text-zinc-950">
                   {formatCurrency(position.dailyBudget)}
+
                   <span className="ml-1 text-xs font-medium text-zinc-500">
                     / day
                   </span>
@@ -161,10 +249,10 @@ export function SafeToSpendDialog({
             </div>
           </div>
 
-          <p className="pb-6 text-xs leading-5 text-zinc-500">
+          <p className="pt-6 text-xs leading-5 text-zinc-500">
             Forecast spending is deliberately excluded from Safe to Spend. It
-            will appear separately in the month-end forecast because it is an
-            estimate rather than a confirmed obligation.
+            remains separate because it is an estimate rather than a confirmed
+            obligation.
           </p>
         </div>
       </DialogContent>

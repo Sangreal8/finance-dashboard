@@ -8,7 +8,9 @@ import type {
   IncomeItem,
   MonthlyPlan,
   Reserve,
+  SafeToSpendAccountRow,
   SafeToSpendBreakdown,
+  SafeToSpendCommitmentRow,
 } from "./types";
 
 const MILLISECONDS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -99,11 +101,15 @@ function roundCurrency(amount: number) {
 }
 
 function buildSafeToSpendBreakdown({
+  accountBalances,
+  commitments,
   availableCash,
   remainingCommitments,
   reservedMoney,
   safetyBuffer,
 }: {
+  accountBalances: SafeToSpendAccountRow[];
+  commitments: SafeToSpendCommitmentRow[];
   availableCash: number;
   remainingCommitments: number;
   reservedMoney: number;
@@ -115,6 +121,8 @@ function buildSafeToSpendBreakdown({
   );
 
   return {
+    accountBalances,
+    commitments,
     availableCash,
     remainingCommitments,
     reservedMoney,
@@ -171,9 +179,14 @@ export function buildFinancialPosition(
 
   const allocatedCash = getAllocatedCash(allocations);
 
-  const knownCommitments = allocations
-    .filter((allocation) => allocation.source === "commitment")
-    .reduce((total, allocation) => total + allocation.amount, 0);
+  const commitmentAllocations = allocations.filter(
+    (allocation) => allocation.source === "commitment",
+  );
+
+  const knownCommitments = commitmentAllocations.reduce(
+    (total, allocation) => total + allocation.amount,
+    0,
+  );
 
   const estimatedRemainingSpend = allocations
     .filter((allocation) => allocation.source === "forecast")
@@ -188,7 +201,33 @@ export function buildFinancialPosition(
     0,
   );
 
+  const accountBalances: SafeToSpendAccountRow[] = accounts
+    .filter(
+      (account) =>
+        account.includeInAvailableCash &&
+        account.currency === "EUR" &&
+        account.type !== "credit_card",
+    )
+    .map((account) => ({
+      id: account.id,
+      name: account.name,
+      amount: account.balance,
+    }));
+
+  const commitments: SafeToSpendCommitmentRow[] = commitmentAllocations.map(
+    (allocation) => ({
+      id: allocation.sourceId,
+      name: allocation.name,
+      amount: allocation.amount,
+      dueDate: allocation.dueDate,
+      confidence:
+        allocation.confidence === "confirmed" ? "confirmed" : "estimated",
+    }),
+  );
+
   const safeToSpendBreakdown = buildSafeToSpendBreakdown({
+    accountBalances,
+    commitments,
     availableCash: availableToday,
     remainingCommitments: knownCommitments,
     reservedMoney: reservedCash,
