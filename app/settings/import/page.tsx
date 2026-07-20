@@ -6,6 +6,7 @@ import { monthlyPlan } from "@/data/monthlyPlan";
 import {
   normaliseTransactions,
   parseAibCsv,
+  parseRevolutCsv,
   parseRevolutWorkbook,
   readXlsxWorkbook,
   saveAibImportSnapshot,
@@ -171,9 +172,14 @@ export default function ImportTransactionsPage() {
     setRevolutError(null);
     setRevolutImport(null);
 
-    if (!file.name.toLowerCase().endsWith(".xlsx")) {
+    const fileName = file.name.toLowerCase();
+
+    const isCsv = fileName.endsWith(".csv");
+    const isXlsx = fileName.endsWith(".xlsx");
+
+    if (!isCsv && !isXlsx) {
       setRevolutError(
-        "Please choose a Revolut account statement in XLSX format.",
+        "Please choose a Revolut account statement in CSV or XLSX format.",
       );
 
       return;
@@ -182,8 +188,9 @@ export default function ImportTransactionsPage() {
     setIsReadingRevolut(true);
 
     try {
-      const workbook = await readXlsxWorkbook(file);
-      const result = parseRevolutWorkbook(workbook);
+      const result = isCsv
+        ? parseRevolutCsv(await file.text())
+        : parseRevolutWorkbook(await readXlsxWorkbook(file));
 
       if (result.transactions.length === 0) {
         const parserMessage =
@@ -204,11 +211,11 @@ export default function ImportTransactionsPage() {
         result,
         transactions,
       });
-    } catch (workbookError) {
+    } catch (importError) {
       setRevolutError(
-        workbookError instanceof Error
-          ? workbookError.message
-          : "The Revolut workbook could not be read.",
+        importError instanceof Error
+          ? importError.message
+          : "The Revolut statement could not be read.",
       );
     } finally {
       setIsReadingRevolut(false);
@@ -365,11 +372,13 @@ export default function ImportTransactionsPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
-            Import AIB transactions into the finance engine, or preview a parsed
-            Revolut account statement before saving it to the dashboard.
+            Import AIB transactions into the finance engine, or import a Revolut
+            account statement before saving it to the dashboard.
           </p>
         </header>
+
         <CurrentBalancesCard />
+
         <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 text-center">
             <div className="mx-auto max-w-md">
@@ -417,20 +426,23 @@ export default function ImportTransactionsPage() {
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-10 text-center">
             <div className="mx-auto max-w-md">
               <p className="text-lg font-semibold text-zinc-950">
-                Import Revolut XLSX
+                Import Revolut statement
               </p>
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Import an official Revolut account statement. The file is
-                analysed locally and saved in this browser for the dashboard.
+                Import an official Revolut account statement in CSV or XLSX
+                format. The file is analysed locally and saved in this browser
+                for the dashboard.
               </p>
 
               <label className="mt-6 inline-flex cursor-pointer items-center justify-center rounded-xl bg-zinc-950 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-zinc-800">
-                {isReadingRevolut ? "Parsing statement…" : "Choose XLSX file"}
+                {isReadingRevolut
+                  ? "Parsing statement…"
+                  : "Choose CSV or XLSX file"}
 
                 <input
                   type="file"
-                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   disabled={isReadingRevolut}
                   onChange={handleRevolutFileChange}
                   className="sr-only"
@@ -448,7 +460,7 @@ export default function ImportTransactionsPage() {
           {revolutError && (
             <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
               <p className="text-sm font-medium text-red-900">
-                Revolut preview unsuccessful
+                Revolut import unsuccessful
               </p>
 
               <p className="mt-1 text-sm text-red-700">{revolutError}</p>
@@ -459,7 +471,7 @@ export default function ImportTransactionsPage() {
             <div className="mt-6 space-y-6">
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
                 <p className="text-sm font-medium text-emerald-950">
-                  Revolut statement parsed successfully
+                  Revolut statement imported successfully
                 </p>
 
                 <p className="mt-1 text-sm text-emerald-800">
@@ -469,7 +481,7 @@ export default function ImportTransactionsPage() {
               </div>
 
               <div>
-                <p className="text-sm text-zinc-500">Revolut preview</p>
+                <p className="text-sm text-zinc-500">Revolut import</p>
 
                 <h2 className="mt-1 text-2xl font-semibold">
                   Statement summary
