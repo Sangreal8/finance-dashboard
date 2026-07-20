@@ -5,18 +5,11 @@ import { buildFinanceTimeline } from "./planner";
 import { buildFinancialPosition } from "./position";
 
 export function getFinancialPosition() {
-  return buildFinancialPosition(
-    accounts,
-    monthlyPlan,
-    reserves
-  );
+  return buildFinancialPosition(accounts, monthlyPlan, reserves);
 }
 
 export function getFinanceTimeline() {
-  return buildFinanceTimeline(
-    accounts,
-    monthlyPlan
-  );
+  return buildFinanceTimeline(accounts, monthlyPlan);
 }
 
 export function getAccounts() {

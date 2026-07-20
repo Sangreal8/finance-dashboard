@@ -1,9 +1,13 @@
 import { getAvailableCash } from "./position";
-import type {
-  Account,
-  FinanceTimelineEvent,
-  MonthlyPlan,
-} from "./types";
+import type { Account, FinanceTimelineEvent, MonthlyPlan } from "./types";
+
+function formatLocalDate(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
 
 function buildIncomeDate(month: string, day: number) {
   const [year, monthNumber] = month.split("-").map(Number);
@@ -15,34 +19,46 @@ function buildIncomeDate(month: string, day: number) {
 
 export function buildFinanceTimeline(
   accounts: Account[],
-  plan: MonthlyPlan
+  plan: MonthlyPlan,
+  referenceDate = formatLocalDate(new Date()),
 ): FinanceTimelineEvent[] {
-  const commitmentEvents: Omit<
-    FinanceTimelineEvent,
-    "balanceAfter"
-  >[] = plan.commitments.map((commitment) => ({
-    id: commitment.id,
-    date: commitment.dueDate,
-    name: commitment.name,
-    amount:
-      commitment.status === "paid" ? 0 : -commitment.amount,
-    category: commitment.type,
-    confidence: commitment.confidence,
-    status: commitment.status,
-  }));
+  const commitmentEvents: Omit<FinanceTimelineEvent, "balanceAfter">[] =
+    plan.commitments
+      .filter((commitment) => {
+        if (commitment.status === "missed") {
+          return true;
+        }
 
-  const incomeEvents: Omit<
-    FinanceTimelineEvent,
-    "balanceAfter"
-  >[] = plan.income.map((income) => ({
-    id: income.id,
-    date: buildIncomeDate(plan.month, income.expectedDay),
-    name: income.name,
-    amount: income.amount,
-    category: "income",
-    confidence: income.confidence,
-    status: "expected",
-  }));
+        if (commitment.dueDate >= referenceDate) {
+          return true;
+        }
+
+        return !["paid", "matched", "cancelled"].includes(commitment.status);
+      })
+      .map((commitment) => ({
+        id: commitment.id,
+        date: commitment.dueDate,
+        name: commitment.name,
+        amount:
+          commitment.status === "paid" || commitment.status === "matched"
+            ? 0
+            : -commitment.amount,
+        category: commitment.type,
+        confidence: commitment.confidence,
+        status: commitment.status,
+      }));
+
+  const incomeEvents: Omit<FinanceTimelineEvent, "balanceAfter">[] = plan.income
+    .map((income) => ({
+      id: income.id,
+      date: buildIncomeDate(plan.month, income.expectedDay),
+      name: income.name,
+      amount: income.amount,
+      category: "income",
+      confidence: income.confidence,
+      status: "expected" as const,
+    }))
+    .filter((income) => income.date >= referenceDate);
 
   const events = [...commitmentEvents, ...incomeEvents].sort((a, b) => {
     const dateComparison = a.date.localeCompare(b.date);

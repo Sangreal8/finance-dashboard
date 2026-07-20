@@ -1,43 +1,29 @@
 import { accounts } from "@/data/accounts";
 import { monthlyPlan } from "@/data/monthlyPlan";
 import { reserves } from "@/data/reserves";
-import {
-  buildFinanceTimeline,
-} from "@/lib/finance/planner";
-import {
-  buildFinancialPosition,
-} from "@/lib/finance/position";
+import { buildFinanceTimeline } from "@/lib/finance/planner";
+import { buildFinancialPosition } from "@/lib/finance/position";
 import type {
   Account,
   MonthlyPlan,
   PlannedCommitment,
 } from "@/lib/finance/types";
-import type {
-  StoredAibImportSnapshot,
-} from "@/lib/import/storage";
-import {
-  reconcileCommitments,
-} from "@/lib/reconciliation";
-import type {
-  ReconciliationMatch,
-} from "@/lib/reconciliation";
+import type { StoredAibImportSnapshot } from "@/lib/import/storage";
+import { reconcileCommitments } from "@/lib/reconciliation";
+import type { ReconciliationMatch } from "@/lib/reconciliation";
 
 export interface LiveFinanceSnapshot {
   accounts: Account[];
   plan: MonthlyPlan;
-  position: ReturnType<
-    typeof buildFinancialPosition
-  >;
-  timeline: ReturnType<
-    typeof buildFinanceTimeline
-  >;
+  position: ReturnType<typeof buildFinancialPosition>;
+  timeline: ReturnType<typeof buildFinanceTimeline>;
   importedAt: string;
   sourceFileName: string;
 }
 
 function updateAibBalance(
   currentAccounts: Account[],
-  latestBalance?: number
+  latestBalance?: number,
 ): Account[] {
   if (latestBalance === undefined) {
     return currentAccounts;
@@ -49,13 +35,13 @@ function updateAibBalance(
           ...account,
           balance: latestBalance,
         }
-      : account
+      : account,
   );
 }
 
 function applyReconciliationMatch(
   commitment: PlannedCommitment,
-  match: ReconciliationMatch | undefined
+  match: ReconciliationMatch | undefined,
 ): PlannedCommitment {
   if (!match) {
     return commitment;
@@ -65,8 +51,7 @@ function applyReconciliationMatch(
     return {
       ...commitment,
       status: "paid",
-      matchedTransactionId:
-        match.transaction?.id,
+      matchedTransactionId: match.transaction?.id,
     };
   }
 
@@ -92,67 +77,48 @@ function applyReconciliationMatch(
 
 function buildReconciledPlan(
   importedSnapshot: StoredAibImportSnapshot,
-  referenceDate: string
+  referenceDate: string,
 ): MonthlyPlan {
   const matches = reconcileCommitments(
     monthlyPlan.commitments,
     importedSnapshot.transactions,
     {
       referenceDate,
-    }
+    },
   );
 
   const matchesByCommitmentId = new Map(
-    matches.map((match) => [
-      match.commitment.id,
-      match,
-    ])
+    matches.map((match) => [match.commitment.id, match]),
   );
 
   return {
     ...monthlyPlan,
-    commitments:
-      monthlyPlan.commitments.map(
-        (commitment) =>
-          applyReconciliationMatch(
-            commitment,
-            matchesByCommitmentId.get(
-              commitment.id
-            )
-          )
+    commitments: monthlyPlan.commitments.map((commitment) =>
+      applyReconciliationMatch(
+        commitment,
+        matchesByCommitmentId.get(commitment.id),
       ),
+    ),
   };
 }
 
 export function buildLiveFinanceSnapshot(
   importedSnapshot: StoredAibImportSnapshot,
-  referenceDate: string
+  referenceDate: string,
 ): LiveFinanceSnapshot {
   const liveAccounts = updateAibBalance(
     accounts,
-    importedSnapshot.latestBalance
+    importedSnapshot.latestBalance,
   );
 
-  const livePlan = buildReconciledPlan(
-    importedSnapshot,
-    referenceDate
-  );
+  const livePlan = buildReconciledPlan(importedSnapshot, referenceDate);
 
   return {
     accounts: liveAccounts,
     plan: livePlan,
-    position: buildFinancialPosition(
-      liveAccounts,
-      livePlan,
-      reserves
-    ),
-    timeline: buildFinanceTimeline(
-      liveAccounts,
-      livePlan
-    ),
-    importedAt:
-      importedSnapshot.importedAt,
-    sourceFileName:
-      importedSnapshot.fileName,
+    position: buildFinancialPosition(liveAccounts, livePlan, reserves),
+    timeline: buildFinanceTimeline(liveAccounts, livePlan, referenceDate),
+    importedAt: importedSnapshot.importedAt,
+    sourceFileName: importedSnapshot.fileName,
   };
 }

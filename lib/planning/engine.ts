@@ -282,7 +282,11 @@ function buildManualPlanningSnapshot(
 
     position: buildFinancialPosition(liveAccounts, monthlyPlan, reserves),
 
-    timeline: buildFinanceTimeline(liveAccounts, monthlyPlan),
+    timeline: buildFinanceTimeline(
+      liveAccounts,
+      monthlyPlan,
+      referenceDateString,
+    ),
 
     importedSnapshot: null,
 
@@ -387,7 +391,7 @@ function buildImportedPlanningSnapshot(
 
     position: buildFinancialPosition(liveAccounts, livePlan, reserves),
 
-    timeline: buildFinanceTimeline(liveAccounts, livePlan),
+    timeline: buildFinanceTimeline(liveAccounts, livePlan, referenceDateString),
 
     importedSnapshot,
 
