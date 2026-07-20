@@ -14,11 +14,7 @@ export const recurringCommitments: RecurringCommitment[] = [
     startsOn: "2026-07-01",
     confidence: "estimated",
     paymentAccountId: "revolut-current",
-    merchantPatterns: [
-      "UBER ONE",
-      "UBER *ONE",
-      "UBER.COM",
-    ],
+    merchantPatterns: ["UBER ONE", "UBER *ONE", "UBER.COM", "UBER"],
   },
   {
     id: "revolut-metal",
@@ -33,10 +29,7 @@ export const recurringCommitments: RecurringCommitment[] = [
     startsOn: "2026-07-01",
     confidence: "confirmed",
     paymentAccountId: "revolut-current",
-    merchantPatterns: [
-      "METAL PLAN FEE",
-      "REVOLUT METAL",
-    ],
+    merchantPatterns: ["METAL PLAN FEE", "REVOLUT METAL"],
   },
   {
     id: "aig-insurance",
@@ -51,11 +44,7 @@ export const recurringCommitments: RecurringCommitment[] = [
     startsOn: "2026-07-01",
     confidence: "confirmed",
     paymentAccountId: "revolut-current",
-    merchantPatterns: [
-      "AIG",
-      "WWW.AIG.IE",
-      "REVOLUT INSURANCE",
-    ],
+    merchantPatterns: ["AIG", "WWW.AIG.IE", "REVOLUT INSURANCE"],
   },
   {
     id: "sky",
@@ -70,10 +59,6 @@ export const recurringCommitments: RecurringCommitment[] = [
     startsOn: "2026-07-01",
     confidence: "confirmed",
     paymentAccountId: "aib-current",
-    merchantPatterns: [
-      "SKY",
-      "SKY DIGITAL",
-      "SKY IRELAND",
-    ],
+    merchantPatterns: ["SKY", "SKY DIGITAL", "SKY IRELAND"],
   },
 ];
