@@ -2,7 +2,7 @@
 
 import { type ChangeEvent, useMemo, useState } from "react";
 import { CurrentBalancesCard } from "@/components/settings/CurrentBalancesCard";
-import { monthlyPlan } from "@/data/monthlyPlan";
+import { buildMonthlyPlan } from "@/data/monthlyPlan";
 import {
   normaliseTransactions,
   parseAibCsv,
@@ -49,6 +49,14 @@ function formatDate(date: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${date}T12:00:00`));
+}
+
+function formatLocalDate(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function getKindLabel(kind: TransactionKind) {
@@ -133,11 +141,14 @@ export default function ImportTransactionsPage() {
 
       saveAibImportSnapshot(file.name, transactions);
 
+      const referenceDate = formatLocalDate(new Date());
+      const monthlyPlan = buildMonthlyPlan(referenceDate.slice(0, 7));
+
       const matches = reconcileCommitments(
         monthlyPlan.commitments,
         transactions,
         {
-          referenceDate: "2026-07-13",
+          referenceDate,
         },
       );
 

@@ -1,5 +1,5 @@
 import { accounts } from "@/data/accounts";
-import { monthlyPlan } from "@/data/monthlyPlan";
+import { buildMonthlyPlan } from "@/data/monthlyPlan";
 import { reserves } from "@/data/reserves";
 import { buildFinanceTimeline } from "@/lib/finance/planner";
 import { buildFinancialPosition } from "@/lib/finance/position";
@@ -79,6 +79,8 @@ function buildReconciledPlan(
   importedSnapshot: StoredAibImportSnapshot,
   referenceDate: string,
 ): MonthlyPlan {
+  const monthlyPlan = buildMonthlyPlan(referenceDate.slice(0, 7));
+
   const matches = reconcileCommitments(
     monthlyPlan.commitments,
     importedSnapshot.transactions,
@@ -106,6 +108,8 @@ export function buildLiveFinanceSnapshot(
   importedSnapshot: StoredAibImportSnapshot,
   referenceDate: string,
 ): LiveFinanceSnapshot {
+  const referenceDateValue = new Date(`${referenceDate}T12:00:00`);
+
   const liveAccounts = updateAibBalance(
     accounts,
     importedSnapshot.latestBalance,
@@ -116,7 +120,12 @@ export function buildLiveFinanceSnapshot(
   return {
     accounts: liveAccounts,
     plan: livePlan,
-    position: buildFinancialPosition(liveAccounts, livePlan, reserves),
+    position: buildFinancialPosition(
+      liveAccounts,
+      livePlan,
+      reserves,
+      referenceDateValue,
+    ),
     timeline: buildFinanceTimeline(liveAccounts, livePlan, referenceDate),
     importedAt: importedSnapshot.importedAt,
     sourceFileName: importedSnapshot.fileName,

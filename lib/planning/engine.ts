@@ -1,5 +1,5 @@
 import { accounts } from "@/data/accounts";
-import { monthlyPlan } from "@/data/monthlyPlan";
+import { buildMonthlyPlan } from "@/data/monthlyPlan";
 import { reserves } from "@/data/reserves";
 import { loadBalanceOverridesSnapshot } from "@/lib/balances";
 import type { AccountBalanceOverride } from "@/lib/balances";
@@ -264,6 +264,7 @@ function buildManualPlanningSnapshot(
   balanceOverrides: Record<string, AccountBalanceOverride>,
 ): PlanningSnapshot {
   const referenceDateString = formatLocalDate(referenceDate);
+  const monthlyPlan = buildMonthlyPlan(referenceDateString.slice(0, 7));
 
   const liveAccounts = applyBalanceOverrides(accounts, balanceOverrides);
 
@@ -280,7 +281,12 @@ function buildManualPlanningSnapshot(
     plan: monthlyPlan,
     reserves,
 
-    position: buildFinancialPosition(liveAccounts, monthlyPlan, reserves),
+    position: buildFinancialPosition(
+      liveAccounts,
+      monthlyPlan,
+      reserves,
+      referenceDate,
+    ),
 
     timeline: buildFinanceTimeline(
       liveAccounts,
@@ -340,6 +346,7 @@ function buildImportedPlanningSnapshot(
   balanceOverrides: Record<string, AccountBalanceOverride>,
 ): PlanningSnapshot {
   const referenceDateString = formatLocalDate(referenceDate);
+  const monthlyPlan = buildMonthlyPlan(referenceDateString.slice(0, 7));
 
   const importedAccounts = updateImportedBalances(accounts, importedSnapshot);
 
@@ -389,7 +396,12 @@ function buildImportedPlanningSnapshot(
     plan: livePlan,
     reserves,
 
-    position: buildFinancialPosition(liveAccounts, livePlan, reserves),
+    position: buildFinancialPosition(
+      liveAccounts,
+      livePlan,
+      reserves,
+      referenceDate,
+    ),
 
     timeline: buildFinanceTimeline(liveAccounts, livePlan, referenceDateString),
 
