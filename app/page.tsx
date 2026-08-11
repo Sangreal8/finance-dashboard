@@ -15,7 +15,7 @@ export default async function DashboardPage() {
     <DashboardClient
       initialPosition={getFinancialPosition(referenceDate)}
       initialTimeline={getFinanceTimeline(referenceDate)}
-      reserves={getReserves()}
+      reserves={getReserves(referenceDate)}
     />
   );
 }

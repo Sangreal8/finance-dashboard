@@ -1,6 +1,6 @@
 import { accounts } from "@/data/accounts";
 import { buildMonthlyPlan } from "@/data/monthlyPlan";
-import { reserves } from "@/data/reserves";
+import { buildReservesForMonth } from "@/data/reserves";
 import { buildFinanceTimeline } from "./planner";
 import { buildFinancialPosition } from "./position";
 
@@ -12,15 +12,23 @@ function formatLocalDate(date: Date): string {
   ].join("-");
 }
 
+function getMonthForDate(referenceDate: Date): string {
+  return formatLocalDate(referenceDate).slice(0, 7);
+}
+
 function getPlanForDate(referenceDate: Date) {
-  return buildMonthlyPlan(formatLocalDate(referenceDate).slice(0, 7));
+  return buildMonthlyPlan(getMonthForDate(referenceDate));
+}
+
+function getReservesForDate(referenceDate: Date) {
+  return buildReservesForMonth(getMonthForDate(referenceDate));
 }
 
 export function getFinancialPosition(referenceDate = new Date()) {
   return buildFinancialPosition(
     accounts,
     getPlanForDate(referenceDate),
-    reserves,
+    getReservesForDate(referenceDate),
     referenceDate,
   );
 }
@@ -41,6 +49,6 @@ export function getMonthlyPlan(referenceDate = new Date()) {
   return getPlanForDate(referenceDate);
 }
 
-export function getReserves() {
-  return reserves;
+export function getReserves(referenceDate = new Date()) {
+  return getReservesForDate(referenceDate);
 }

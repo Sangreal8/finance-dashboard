@@ -1,6 +1,6 @@
 import { accounts } from "@/data/accounts";
 import { buildMonthlyPlan } from "@/data/monthlyPlan";
-import { reserves } from "@/data/reserves";
+import { buildReservesForMonth } from "@/data/reserves";
 import { loadBalanceOverridesSnapshot } from "@/lib/balances";
 import type { AccountBalanceOverride } from "@/lib/balances";
 import {
@@ -85,21 +85,18 @@ function updateImportedBalances(
     }
 
     /**
-     * The Revolut export exposes Savings as one
-     * aggregate product. It cannot reliably split
-     * that balance between individual pockets, so
-     * those manually maintained balances remain
-     * untouched.
+     * The Revolut export exposes Savings as one aggregate product.
+     * It cannot reliably split that balance between individual pockets,
+     * so those manually maintained balances remain untouched.
      */
     return account;
   });
 }
 
 /**
- * A manually confirmed live balance has the highest
- * precedence because it reflects the user's banking app
- * today, even when the latest transaction export lags
- * behind.
+ * A manually confirmed live balance has the highest precedence because
+ * it reflects the user's banking app today, even when the latest
+ * transaction export lags behind.
  */
 function applyBalanceOverrides(
   currentAccounts: Account[],
@@ -197,8 +194,8 @@ function buildReconciledPlan(
 
     /**
      * Manual forecast items deliberately remain active.
-     * Calculated forecasts are exposed separately until
-     * they are sufficiently reliable.
+     * Calculated forecasts are exposed separately until they are
+     * sufficiently reliable.
      */
     forecastItems: basePlan.forecastItems,
 
@@ -264,7 +261,9 @@ function buildManualPlanningSnapshot(
   balanceOverrides: Record<string, AccountBalanceOverride>,
 ): PlanningSnapshot {
   const referenceDateString = formatLocalDate(referenceDate);
-  const monthlyPlan = buildMonthlyPlan(referenceDateString.slice(0, 7));
+  const month = referenceDateString.slice(0, 7);
+  const monthlyPlan = buildMonthlyPlan(month);
+  const reserves = buildReservesForMonth(month);
 
   const liveAccounts = applyBalanceOverrides(accounts, balanceOverrides);
 
@@ -314,7 +313,6 @@ function buildManualPlanningSnapshot(
 
 interface ImportedKnowledge {
   merchantProfiles: MerchantProfile[];
-
   transactions: EnrichedTransaction[];
 }
 
@@ -346,7 +344,9 @@ function buildImportedPlanningSnapshot(
   balanceOverrides: Record<string, AccountBalanceOverride>,
 ): PlanningSnapshot {
   const referenceDateString = formatLocalDate(referenceDate);
-  const monthlyPlan = buildMonthlyPlan(referenceDateString.slice(0, 7));
+  const month = referenceDateString.slice(0, 7);
+  const monthlyPlan = buildMonthlyPlan(month);
+  const reserves = buildReservesForMonth(month);
 
   const importedAccounts = updateImportedBalances(accounts, importedSnapshot);
 
@@ -423,8 +423,7 @@ function buildImportedPlanningSnapshot(
 }
 
 /**
- * Builds the complete planning state from the best locally
- * available data.
+ * Builds the complete planning state from the best locally available data.
  *
  * Balance precedence:
  *
@@ -432,14 +431,13 @@ function buildImportedPlanningSnapshot(
  * 2. Latest imported statement balance
  * 3. Static account fallback
  *
- * This function reads browser storage and must therefore
- * be called from client-side code.
+ * This function reads browser storage and must therefore be called from
+ * client-side code.
  */
 export function buildStoredPlanningSnapshot(
   referenceDate = new Date(),
 ): PlanningSnapshot {
   const importedSnapshot = loadCombinedImportSnapshot();
-
   const balanceOverrides = loadBalanceOverridesSnapshot().overrides;
 
   if (!importedSnapshot) {

@@ -1,6 +1,6 @@
 import { accounts } from "@/data/accounts";
 import { buildMonthlyPlan } from "@/data/monthlyPlan";
-import { reserves } from "@/data/reserves";
+import { buildReservesForMonth } from "@/data/reserves";
 import { buildFinanceTimeline } from "@/lib/finance/planner";
 import { buildFinancialPosition } from "@/lib/finance/position";
 import type {
@@ -109,6 +109,7 @@ export function buildLiveFinanceSnapshot(
   referenceDate: string,
 ): LiveFinanceSnapshot {
   const referenceDateValue = new Date(`${referenceDate}T12:00:00`);
+  const reserves = buildReservesForMonth(referenceDate.slice(0, 7));
 
   const liveAccounts = updateAibBalance(
     accounts,
@@ -120,13 +121,16 @@ export function buildLiveFinanceSnapshot(
   return {
     accounts: liveAccounts,
     plan: livePlan,
+
     position: buildFinancialPosition(
       liveAccounts,
       livePlan,
       reserves,
       referenceDateValue,
     ),
+
     timeline: buildFinanceTimeline(liveAccounts, livePlan, referenceDate),
+
     importedAt: importedSnapshot.importedAt,
     sourceFileName: importedSnapshot.fileName,
   };
